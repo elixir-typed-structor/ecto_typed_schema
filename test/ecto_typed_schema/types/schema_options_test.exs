@@ -292,7 +292,7 @@ defmodule EctoTypedSchema.Types.SchemaOptionsTest do
     end
   end
 
-  describe "opaque: true on embedded schema" do
+  describe "type_kind: :opaque on embedded schema" do
     test "generates @opaque instead of @type", ctx do
       expected_types =
         with_tmpmodule Schema, ctx do
@@ -317,7 +317,7 @@ defmodule EctoTypedSchema.Types.SchemaOptionsTest do
 
           @primary_key false
 
-          typed_embedded_schema opaque: true do
+          typed_embedded_schema type_kind: :opaque do
             field :int, :integer
           end
         after

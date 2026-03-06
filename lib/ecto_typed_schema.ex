@@ -18,6 +18,7 @@ defmodule EctoTypedSchema do
       @before_compile EctoTypedSchema
       @on_definition {EctoTypedSchema, :on_def}
       Module.register_attribute(__MODULE__, :ecto_typed_schema_typed, accumulate: true)
+      Module.register_attribute(__MODULE__, :ecto_typed_schema_parameters, accumulate: true)
       Module.register_attribute(__MODULE__, :ecto_typed_schema_opts, [])
 
       import EctoTypedSchema,
@@ -163,14 +164,36 @@ defmodule EctoTypedSchema do
       end
       |> Enum.reject(&is_nil/1)
 
+    # Read parameters (accumulate stores in reverse order)
+    parameters =
+      env.module
+      |> Module.get_attribute(:ecto_typed_schema_parameters, [])
+      |> Enum.reverse()
+
     # Build typed_structor options
     structor_opts = [define_struct: false]
 
     structor_opts =
-      if Keyword.get(schema_opts, :opaque, false) do
-        Keyword.put(structor_opts, :type_kind, :opaque)
-      else
-        structor_opts
+      case Keyword.get(schema_opts, :type_kind) do
+        nil -> structor_opts
+        type_kind -> Keyword.put(structor_opts, :type_kind, type_kind)
+      end
+
+    structor_opts =
+      case Keyword.get(schema_opts, :type_name) do
+        nil -> structor_opts
+        type_name -> Keyword.put(structor_opts, :type_name, type_name)
+      end
+
+    # Generate parameter AST for typed_structor block
+    parameters_ast =
+      for param <- parameters do
+        name = Keyword.fetch!(param, :name)
+        opts = Keyword.delete(param, :name)
+
+        quote do
+          parameter unquote(name), unquote(opts)
+        end
       end
 
     # Check if this is an embedded schema
@@ -179,6 +202,7 @@ defmodule EctoTypedSchema do
       # Embedded schema - no __meta__ field
       quote do
         typed_structor unquote(structor_opts) do
+          unquote(parameters_ast)
           unquote(fields_ast)
           unquote(additional_fields_ast)
         end
@@ -187,6 +211,7 @@ defmodule EctoTypedSchema do
       # Regular schema with __meta__ field
       quote do
         typed_structor unquote(structor_opts) do
+          unquote(parameters_ast)
           field :__meta__, Ecto.Schema.Metadata.t(__MODULE__), enforce: true
           unquote(fields_ast)
           unquote(additional_fields_ast)

@@ -24,6 +24,30 @@ defmodule EctoTypedSchema.FieldMacros do
     * `:default` - Sets a default value for the struct field
   """
 
+  @doc """
+  Declares a type parameter for the schema's generated type.
+
+  Parameters make the generated type parameterized, e.g., `@type t(age) :: %__MODULE__{...}`.
+  They are passed through to `TypedStructor.parameter/2`.
+
+  ## Examples
+
+      typed_schema "users" do
+        parameter :age
+
+        field :name, :string
+        field :age, :integer, typed: [type: age]
+      end
+
+  This generates `@type t(age) :: %__MODULE__{...}` where the `:age` field
+  uses the type parameter instead of the inferred `integer()` type.
+  """
+  defmacro parameter(name, opts \\ []) when is_atom(name) do
+    quote do
+      @ecto_typed_schema_parameters Keyword.merge(unquote(opts), name: unquote(name))
+    end
+  end
+
   defp validate_typed_option!(field_name, typed) do
     unless Keyword.keyword?(typed) do
       raise ArgumentError,
