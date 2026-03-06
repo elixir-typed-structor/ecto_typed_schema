@@ -3,9 +3,10 @@ defmodule EctoTypedSchema.FieldMacros do
   Provides typed wrappers around Ecto.Schema field macros.
 
   These macros capture type information during schema definition that is later
-  used to generate accurate `@type t()` specifications. Each macro wraps its
-  corresponding `Ecto.Schema` macro while extracting the `:typed` option for
-  type customization.
+  used by `EctoTypedSchema.__before_compile__/1` to generate accurate
+  `@type t()` specifications. Each macro wraps its corresponding
+  `Ecto.Schema` macro while extracting the `:typed` option for type
+  customization.
 
   ## Type Generation Overview
 
@@ -42,17 +43,21 @@ defmodule EctoTypedSchema.FieldMacros do
   This generates `@type t(age) :: %__MODULE__{...}` where the `:age` field
   uses the type parameter instead of the inferred `integer()` type.
   """
+  @spec parameter(atom(), keyword()) :: Macro.t()
   defmacro parameter(name, opts \\ []) when is_atom(name) do
     quote do
       @ecto_typed_schema_parameters Keyword.merge(unquote(opts), name: unquote(name))
     end
   end
 
+  @spec validate_typed_option!(atom(), term()) :: :ok
   defp validate_typed_option!(field_name, typed) do
     unless Keyword.keyword?(typed) do
       raise ArgumentError,
             "field :#{field_name} option :typed must be a keyword list, got: #{inspect(typed)}"
     end
+
+    :ok
   end
 
   @doc """
@@ -107,12 +112,13 @@ defmodule EctoTypedSchema.FieldMacros do
       # Enforced field (required in struct creation)
       field :email, :string, typed: [enforce: true]
   """
+  @spec field(atom(), atom() | module(), keyword()) :: Macro.t()
   defmacro field(name, type \\ :string, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(name, typed)
 
-    # Pass Ecto's default to typed options unless explicitly overridden
-    # Skip nil defaults (they don't affect nullability) and when typed has null: true
+    # Propagate non-nil Ecto defaults to typed opts so TypedStructor sees them,
+    # unless the field is explicitly nullable (null: true).
     typed =
       with {:ok, default} when not is_nil(default) <- Keyword.fetch(opts, :default),
            false <- Keyword.get(typed, :null) == true do
@@ -121,16 +127,13 @@ defmodule EctoTypedSchema.FieldMacros do
         _ -> typed
       end
 
-    # Capture enum values if this is an Ecto.Enum field
+    # Capture enum values so TypeMapper can generate a union type.
     typed =
       case type do
         Ecto.Enum ->
           case Keyword.get(opts, :values) do
-            values when is_list(values) ->
-              Keyword.put(typed, :enum_values, values)
-
-            _ ->
-              typed
+            values when is_list(values) -> Keyword.put(typed, :enum_values, values)
+            _ -> typed
           end
 
         _ ->
@@ -186,6 +189,7 @@ defmodule EctoTypedSchema.FieldMacros do
       #   author: Ecto.Schema.belongs_to(Author.t())
       belongs_to :author, Author, typed: [null: false]
   """
+  @spec belongs_to(atom(), module(), keyword()) :: Macro.t()
   defmacro belongs_to(name, schema, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(name, typed)
@@ -206,22 +210,10 @@ defmodule EctoTypedSchema.FieldMacros do
     define_field = Keyword.get(opts, :define_field, true)
 
     quote location: :keep do
-      @ecto_typed_schema_typed {
-        unquote(name),
-        unquote(
-          typed
-          |> Keyword.put(:schema, schema)
-          |> Macro.escape()
-        )
-      }
+      @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
 
       if unquote(define_field) do
-        @ecto_typed_schema_typed {unquote(foreign_key),
-                                  unquote(
-                                    foreign_key_typed
-                                    |> Keyword.put(:schema, schema)
-                                    |> Macro.escape()
-                                  )}
+        @ecto_typed_schema_typed {unquote(foreign_key), unquote(Macro.escape(foreign_key_typed))}
       end
 
       Ecto.Schema.belongs_to(unquote(name), unquote(schema), unquote(opts))
@@ -263,56 +255,36 @@ defmodule EctoTypedSchema.FieldMacros do
       has_one :avatar, Avatar, typed: [type: Avatar.t() | nil]
   """
   # Handle has_one with through option (2 arguments)
+  @spec has_one(atom(), keyword()) :: Macro.t()
   defmacro has_one(name, opts) when is_list(opts) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(name, typed)
 
+    typed = maybe_put_through(typed, opts)
+
     quote location: :keep do
-      @ecto_typed_schema_typed {
-        unquote(name),
-        unquote(
-          typed
-          |> Keyword.put(:through, Keyword.get(opts, :through))
-          |> Macro.escape()
-        )
-      }
+      @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
 
       Ecto.Schema.has_one(unquote(name), unquote(opts))
     end
   end
 
+  @spec has_one(atom(), module(), keyword()) :: Macro.t()
   defmacro has_one(name, schema, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(name, typed)
 
-    if Keyword.has_key?(opts, :through) do
-      through = Keyword.get(opts, :through)
-
-      quote location: :keep do
-        @ecto_typed_schema_typed {
-          unquote(name),
-          unquote(
-            typed
-            |> Keyword.put(:through, through)
-            |> Macro.escape()
-          )
-        }
-
-        Ecto.Schema.has_one(unquote(name), unquote(schema), unquote(opts))
+    typed =
+      if Keyword.has_key?(opts, :through) do
+        maybe_put_through(typed, opts)
+      else
+        typed
       end
-    else
-      quote location: :keep do
-        @ecto_typed_schema_typed {
-          unquote(name),
-          unquote(
-            typed
-            |> Keyword.put(:schema, schema)
-            |> Macro.escape()
-          )
-        }
 
-        Ecto.Schema.has_one(unquote(name), unquote(schema), unquote(opts))
-      end
+    quote location: :keep do
+      @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
+
+      Ecto.Schema.has_one(unquote(name), unquote(schema), unquote(opts))
     end
   end
 
@@ -352,19 +324,13 @@ defmodule EctoTypedSchema.FieldMacros do
       #   settings: Settings.t()
       embeds_one :settings, Settings, typed: [enforce: true]
   """
+  @spec embeds_one(atom(), module(), keyword()) :: Macro.t()
   defmacro embeds_one(name, schema, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(name, typed)
 
     quote location: :keep do
-      @ecto_typed_schema_typed {
-        unquote(name),
-        unquote(
-          typed
-          |> Keyword.put(:schema, schema)
-          |> Macro.escape()
-        )
-      }
+      @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
 
       Ecto.Schema.embeds_one(unquote(name), unquote(schema), unquote(opts))
     end
@@ -407,19 +373,13 @@ defmodule EctoTypedSchema.FieldMacros do
         field :version, :integer
       end
   """
+  @spec embeds_one(atom(), module(), keyword(), keyword()) :: Macro.t()
   defmacro embeds_one(name, schema, opts, do: block) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(name, typed)
 
     quote location: :keep do
-      @ecto_typed_schema_typed {
-        unquote(name),
-        unquote(
-          typed
-          |> Keyword.put(:schema, schema)
-          |> Macro.escape()
-        )
-      }
+      @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
 
       Ecto.Schema.embeds_one(unquote(name), unquote(schema), unquote(opts), do: unquote(block))
     end
@@ -461,19 +421,13 @@ defmodule EctoTypedSchema.FieldMacros do
       #   tags: list(Tag.t())
       embeds_many :tags, Tag, typed: [enforce: true]
   """
+  @spec embeds_many(atom(), module(), keyword()) :: Macro.t()
   defmacro embeds_many(name, schema, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(name, typed)
 
     quote location: :keep do
-      @ecto_typed_schema_typed {
-        unquote(name),
-        unquote(
-          typed
-          |> Keyword.put(:schema, schema)
-          |> Macro.escape()
-        )
-      }
+      @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
 
       Ecto.Schema.embeds_many(unquote(name), unquote(schema), unquote(opts))
     end
@@ -517,19 +471,13 @@ defmodule EctoTypedSchema.FieldMacros do
         field :name, :string
       end
   """
+  @spec embeds_many(atom(), module(), keyword(), keyword()) :: Macro.t()
   defmacro embeds_many(name, schema, opts, do: block) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(name, typed)
 
     quote location: :keep do
-      @ecto_typed_schema_typed {
-        unquote(name),
-        unquote(
-          typed
-          |> Keyword.put(:schema, schema)
-          |> Macro.escape()
-        )
-      }
+      @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
 
       Ecto.Schema.embeds_many(unquote(name), unquote(schema), unquote(opts), do: unquote(block))
     end
@@ -582,57 +530,36 @@ defmodule EctoTypedSchema.FieldMacros do
       has_many :items, Item, typed: [enforce: true]
   """
   # Handle has_many with through option (2 arguments)
+  @spec has_many(atom(), keyword()) :: Macro.t()
   defmacro has_many(name, opts) when is_list(opts) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(name, typed)
 
+    typed = maybe_put_through(typed, opts)
+
     quote location: :keep do
-      # For through associations, we store the through option
-      @ecto_typed_schema_typed {
-        unquote(name),
-        unquote(
-          typed
-          |> Keyword.put(:through, Keyword.get(opts, :through))
-          |> Macro.escape()
-        )
-      }
+      @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
 
       Ecto.Schema.has_many(unquote(name), unquote(opts))
     end
   end
 
+  @spec has_many(atom(), module(), keyword()) :: Macro.t()
   defmacro has_many(name, schema, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(name, typed)
 
-    if Keyword.has_key?(opts, :through) do
-      through = Keyword.get(opts, :through)
-
-      quote location: :keep do
-        @ecto_typed_schema_typed {
-          unquote(name),
-          unquote(
-            typed
-            |> Keyword.put(:through, through)
-            |> Macro.escape()
-          )
-        }
-
-        Ecto.Schema.has_many(unquote(name), unquote(schema), unquote(opts))
+    typed =
+      if Keyword.has_key?(opts, :through) do
+        maybe_put_through(typed, opts)
+      else
+        typed
       end
-    else
-      quote location: :keep do
-        @ecto_typed_schema_typed {
-          unquote(name),
-          unquote(
-            typed
-            |> Keyword.put(:schema, schema)
-            |> Macro.escape()
-          )
-        }
 
-        Ecto.Schema.has_many(unquote(name), unquote(schema), unquote(opts))
-      end
+    quote location: :keep do
+      @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
+
+      Ecto.Schema.has_many(unquote(name), unquote(schema), unquote(opts))
     end
   end
 
@@ -680,19 +607,13 @@ defmodule EctoTypedSchema.FieldMacros do
         join_through: "user_permissions",
         typed: [enforce: true]
   """
+  @spec many_to_many(atom(), module(), keyword()) :: Macro.t()
   defmacro many_to_many(name, schema, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(name, typed)
 
     quote location: :keep do
-      @ecto_typed_schema_typed {
-        unquote(name),
-        unquote(
-          typed
-          |> Keyword.put(:schema, schema)
-          |> Macro.escape()
-        )
-      }
+      @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
 
       Ecto.Schema.many_to_many(unquote(name), unquote(schema), unquote(opts))
     end
@@ -755,13 +676,14 @@ defmodule EctoTypedSchema.FieldMacros do
       #   inserted_at: NaiveDateTime.t() | nil
       timestamps(updated_at: false)
   """
+  @spec timestamps(keyword()) :: Macro.t()
   defmacro timestamps(opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
     validate_typed_option!(:timestamps, typed)
 
     quote location: :keep do
-      # Merge @timestamps_opts (if defined) with explicit opts
-      # Explicit opts take precedence over @timestamps_opts
+      # Merge @timestamps_opts (if defined) with explicit opts.
+      # Explicit opts take precedence over @timestamps_opts.
       timestamps_defaults =
         if Module.has_attribute?(__MODULE__, :timestamps_opts) do
           @timestamps_opts
@@ -784,5 +706,12 @@ defmodule EctoTypedSchema.FieldMacros do
 
       Ecto.Schema.timestamps(unquote(opts))
     end
+  end
+
+  # Stores the `:through` path from Ecto opts into typed opts so
+  # `__before_compile__` can detect through-associations.
+  @spec maybe_put_through(keyword(), keyword()) :: keyword()
+  defp maybe_put_through(typed, opts) do
+    Keyword.put(typed, :through, Keyword.get(opts, :through))
   end
 end
