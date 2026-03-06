@@ -160,7 +160,7 @@ defmodule EctoTypedSchema do
           |> Map.get(field, [])
           |> merge_schema_opts(schema_defaults)
 
-        build_through_field_ast(field, typed, assocs)
+        build_through_field_ast(env.module, field, typed, assocs)
       end)
       |> Enum.reject(&is_nil/1)
     end
@@ -258,8 +258,8 @@ defmodule EctoTypedSchema do
 
   # Builds a typed_structor field AST for a through-association field.
   # Returns nil if the field has no `:through` key (should be skipped).
-  @spec build_through_field_ast(atom(), keyword(), list()) :: Macro.t() | nil
-  defp build_through_field_ast(field, typed, assocs) do
+  @spec build_through_field_ast(module(), atom(), keyword(), list()) :: Macro.t() | nil
+  defp build_through_field_ast(module, field, typed, assocs) do
     case Keyword.fetch(typed, :through) do
       {:ok, through} ->
         cardinality =
@@ -279,7 +279,7 @@ defmodule EctoTypedSchema do
               {custom_type, Keyword.delete(typed, :type)}
 
             :error ->
-              resolve_through_type(field, typed, assocs, through, cardinality)
+              resolve_through_type(module, field, typed, assocs, through, cardinality)
           end
 
         quote do
@@ -294,11 +294,13 @@ defmodule EctoTypedSchema do
 
   # Resolves the Elixir type for a through-association by traversing the
   # association chain to find the target schema.
-  @spec resolve_through_type(atom(), keyword(), list(), [atom()], :one | :many) ::
+  @spec resolve_through_type(module(), atom(), keyword(), list(), [atom()], :one | :many) ::
           {Macro.t(), keyword()}
-  defp resolve_through_type(_field, typed, assocs, through, cardinality) do
+  defp resolve_through_type(module, field, typed, assocs, through, cardinality) do
     case resolve_through_schema(assocs, through) do
       nil ->
+        warn_unresolved_through(module, field, through, cardinality)
+
         case cardinality do
           :one ->
             {quote(do: term()), typed}
@@ -317,6 +319,19 @@ defmodule EctoTypedSchema do
              force_list_defaults(typed)}
         end
     end
+  end
+
+  # Emits a compile-time warning when a through-association chain cannot be resolved.
+  @spec warn_unresolved_through(module(), atom(), [atom()], :one | :many) :: :ok
+  defp warn_unresolved_through(module, field, through, cardinality) do
+    fallback = if cardinality == :one, do: "term()", else: "list(term())"
+    path = Enum.map_join(through, ", ", &inspect/1)
+
+    IO.warn(
+      "#{inspect(module)}: field :#{field} through association [#{path}] " <>
+        "could not be resolved at compile time. Falling back to #{fallback}. " <>
+        "To specify the type explicitly, use typed: [type: ...]"
+    )
   end
 
   # Walks the association chain to resolve the final target schema.

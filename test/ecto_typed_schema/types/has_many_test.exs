@@ -422,4 +422,48 @@ defmodule EctoTypedSchema.Types.HasManyTest do
       assert_type(expected_types, generated_types)
     end
   end
+
+  describe "through association fallback warning" do
+    test "emits warning when through chain cannot be resolved", ctx do
+      warnings =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          with_tmpmodule Schema, ctx do
+            use EctoTypedSchema
+
+            typed_schema "users" do
+              has_many :posts, Post, foreign_key: :user_id
+              # :nonexistent doesn't exist on Post, so resolution fails
+              has_many :post_tags, through: [:posts, :nonexistent]
+            end
+          after
+            fetch_types!(Schema)
+          end
+        end)
+
+      assert warnings =~ "post_tags"
+      assert warnings =~ ":posts, :nonexistent"
+      assert warnings =~ "typed: [type: ...]"
+    end
+
+    test "no warning when typed: [type: ...] is provided", ctx do
+      warnings =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          with_tmpmodule Schema, ctx do
+            use EctoTypedSchema
+
+            typed_schema "users" do
+              has_many :posts, Post, foreign_key: :user_id
+
+              has_many :post_tags,
+                through: [:posts, :nonexistent],
+                typed: [type: list(Tag.t())]
+            end
+          after
+            fetch_types!(Schema)
+          end
+        end)
+
+      assert warnings == ""
+    end
+  end
 end

@@ -313,4 +313,27 @@ defmodule EctoTypedSchema.Types.HasOneTest do
       assert_type(expected_types, generated_types)
     end
   end
+
+  describe "through association fallback warning" do
+    test "emits warning when through chain cannot be resolved", ctx do
+      warnings =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          with_tmpmodule Schema, ctx do
+            use EctoTypedSchema
+
+            typed_schema "users" do
+              has_one :profile, Profile, foreign_key: :user_id
+              # :nonexistent doesn't exist on Profile, so resolution fails
+              has_one :profile_detail, through: [:profile, :nonexistent]
+            end
+          after
+            fetch_types!(Schema)
+          end
+        end)
+
+      assert warnings =~ "profile_detail"
+      assert warnings =~ ":profile, :nonexistent"
+      assert warnings =~ "typed: [type: ...]"
+    end
+  end
 end
