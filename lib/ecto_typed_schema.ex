@@ -41,6 +41,7 @@ defmodule EctoTypedSchema do
       @on_definition {EctoTypedSchema, :on_def}
       Module.register_attribute(__MODULE__, :ecto_typed_schema_typed, accumulate: true)
       Module.register_attribute(__MODULE__, :ecto_typed_schema_parameters, accumulate: true)
+      Module.register_attribute(__MODULE__, :ecto_typed_schema_plugins, accumulate: true)
       Module.register_attribute(__MODULE__, :ecto_typed_schema_opts, [])
 
       import EctoTypedSchema,
@@ -87,12 +88,14 @@ defmodule EctoTypedSchema do
       build_additional_fields_ast(env, changeset_info, override_map, schema_defaults)
 
     parameters_ast = build_parameters_ast(env)
+    plugins_ast = build_plugins_ast(env)
     structor_opts = build_structor_opts(schema_opts)
     schema_source = Module.get_attribute(env.module, :ecto_typed_schema_source)
 
     emit_typed_structor(
       schema_source,
       structor_opts,
+      plugins_ast,
       parameters_ast,
       fields_ast,
       additional_fields_ast
@@ -179,6 +182,19 @@ defmodule EctoTypedSchema do
     end)
   end
 
+  # Builds quoted `plugin` calls from accumulated plugin attributes.
+  @spec build_plugins_ast(Macro.Env.t()) :: [Macro.t()]
+  defp build_plugins_ast(env) do
+    env.module
+    |> Module.get_attribute(:ecto_typed_schema_plugins, [])
+    |> Enum.reverse()
+    |> Enum.map(fn {plugin, opts} ->
+      quote do
+        plugin unquote(plugin), unquote(opts)
+      end
+    end)
+  end
+
   # Builds the options keyword list for `typed_structor`.
   @spec build_structor_opts(keyword()) :: keyword()
   defp build_structor_opts(schema_opts) do
@@ -194,11 +210,13 @@ defmodule EctoTypedSchema do
           keyword(),
           [Macro.t()],
           [Macro.t()],
+          [Macro.t()],
           [Macro.t()]
         ) :: Macro.t()
-  defp emit_typed_structor(nil, opts, parameters, fields, additional_fields) do
+  defp emit_typed_structor(nil, opts, plugins, parameters, fields, additional_fields) do
     quote do
       typed_structor unquote(opts) do
+        unquote(plugins)
         unquote(parameters)
         unquote(fields)
         unquote(additional_fields)
@@ -206,9 +224,10 @@ defmodule EctoTypedSchema do
     end
   end
 
-  defp emit_typed_structor(_source, opts, parameters, fields, additional_fields) do
+  defp emit_typed_structor(_source, opts, plugins, parameters, fields, additional_fields) do
     quote do
       typed_structor unquote(opts) do
+        unquote(plugins)
         unquote(parameters)
         field :__meta__, Ecto.Schema.Metadata.t(__MODULE__), enforce: true
         unquote(fields)

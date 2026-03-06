@@ -50,6 +50,30 @@ defmodule EctoTypedSchema.FieldMacros do
     end
   end
 
+  @doc """
+  Registers a `TypedStructor` plugin for the schema's generated type.
+
+  Plugins are forwarded to the `typed_structor` block generated at compile time.
+  They receive the `TypedStructor.Definition` and can modify types, add fields,
+  or inject code before/after the struct definition.
+
+  See `TypedStructor.Plugin` for the plugin behaviour and callbacks.
+
+  ## Examples
+
+      typed_schema "users" do
+        plugin MyPlugin, some_option: true
+
+        field :name, :string
+      end
+  """
+  @spec plugin(module(), keyword()) :: Macro.t()
+  defmacro plugin(plugin, opts \\ []) do
+    quote do
+      @ecto_typed_schema_plugins {unquote(plugin), unquote(opts)}
+    end
+  end
+
   @spec validate_typed_option!(atom(), term()) :: :ok
   defp validate_typed_option!(field_name, typed) do
     unless Keyword.keyword?(typed) do
