@@ -111,7 +111,7 @@ defmodule EctoTypedSchema do
 
     additional_fields_ast =
       for field <- typed_only_fields do
-        {_type_opts, typed} =
+        {type_opts, typed} =
           typeds
           |> Keyword.get(field, [])
           |> Keyword.split([:type])
@@ -128,28 +128,50 @@ defmodule EctoTypedSchema do
                 _ -> :many
               end
 
+            # If user provided a type override, use it directly
             {field_type, typed} =
-              case resolve_through_schema(env, assocs, through) do
-                nil ->
-                  case cardinality do
-                    :one ->
-                      {quote(do: term()), typed}
+              case Keyword.fetch(type_opts, :type) do
+                {:ok, custom_type} ->
+                  typed =
+                    case cardinality do
+                      :many ->
+                        typed |> Keyword.put(:null, false) |> Keyword.put(:default, [])
 
-                    :many ->
-                      {quote(do: list(term())),
-                       typed |> Keyword.put(:null, false) |> Keyword.put(:default, [])}
-                  end
+                      :one ->
+                        typed
+                    end
 
-                target_schema ->
-                  case cardinality do
-                    :one ->
-                      field_type = quote(do: Ecto.Schema.has_one(unquote(target_schema).t()))
-                      {field_type, typed}
+                  {custom_type, typed}
 
-                    :many ->
-                      field_type = quote(do: Ecto.Schema.has_many(unquote(target_schema).t()))
-                      typed = typed |> Keyword.put(:null, false) |> Keyword.put(:default, [])
-                      {field_type, typed}
+                :error ->
+                  case resolve_through_schema(env, assocs, through) do
+                    nil ->
+                      case cardinality do
+                        :one ->
+                          {quote(do: term()), typed}
+
+                        :many ->
+                          {quote(do: list(term())),
+                           typed |> Keyword.put(:null, false) |> Keyword.put(:default, [])}
+                      end
+
+                    target_schema ->
+                      case cardinality do
+                        :one ->
+                          field_type =
+                            quote(do: Ecto.Schema.has_one(unquote(target_schema).t()))
+
+                          {field_type, typed}
+
+                        :many ->
+                          field_type =
+                            quote(do: Ecto.Schema.has_many(unquote(target_schema).t()))
+
+                          typed =
+                            typed |> Keyword.put(:null, false) |> Keyword.put(:default, [])
+
+                          {field_type, typed}
+                      end
                   end
               end
 
@@ -239,9 +261,14 @@ defmodule EctoTypedSchema do
         # For remaining steps, the schemas should be compiled and have __schema__/2
         final_schema =
           Enum.reduce_while(rest_steps, initial_schema, fn step_name, current_schema ->
-            case current_schema.__schema__(:association, step_name) do
-              nil -> {:halt, nil}
-              assoc -> {:cont, assoc.related}
+            if Code.ensure_loaded?(current_schema) and
+                 function_exported?(current_schema, :__schema__, 2) do
+              case current_schema.__schema__(:association, step_name) do
+                nil -> {:halt, nil}
+                assoc -> {:cont, assoc.related}
+              end
+            else
+              {:halt, nil}
             end
           end)
 

@@ -805,6 +805,40 @@ defmodule EctoTypedSchema.Types.FieldTest do
     end
   end
 
+  describe "field with default: nil" do
+    test "stays nullable despite having a default", ctx do
+      expected_types =
+        with_tmpmodule Schema, ctx do
+          use Ecto.Schema
+
+          schema "test" do
+            field :name, :string, default: nil
+          end
+
+          @type t() :: %__MODULE__{
+                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
+                  id: integer(),
+                  name: String.t() | nil
+                }
+        after
+          fetch_types!(Schema)
+        end
+
+      generated_types =
+        with_tmpmodule Schema, ctx do
+          use EctoTypedSchema
+
+          typed_schema "test" do
+            field :name, :string, default: nil
+          end
+        after
+          fetch_types!(Schema)
+        end
+
+      assert_type(expected_types, generated_types)
+    end
+  end
+
   describe "nested composite types" do
     test "array of arrays", ctx do
       expected_types =

@@ -420,6 +420,43 @@ defmodule EctoTypedSchema.Types.BelongsToTest do
     end
   end
 
+  describe "with define_field: false and typed FK" do
+    test "manual FK typed options are not overridden", ctx do
+      expected_types =
+        with_tmpmodule Schema, ctx do
+          use Ecto.Schema
+
+          schema "posts" do
+            field :author_id, :binary_id
+            belongs_to :author, User, define_field: false
+          end
+
+          @type t() :: %__MODULE__{
+                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
+                  id: integer(),
+                  author_id: Ecto.UUID.t(),
+                  author: Ecto.Schema.belongs_to(User.t()) | nil
+                }
+        after
+          fetch_types!(Schema)
+        end
+
+      generated_types =
+        with_tmpmodule Schema, ctx do
+          use EctoTypedSchema
+
+          typed_schema "posts" do
+            field :author_id, :binary_id, typed: [null: false]
+            belongs_to :author, User, define_field: false
+          end
+        after
+          fetch_types!(Schema)
+        end
+
+      assert_type(expected_types, generated_types)
+    end
+  end
+
   describe "self-referential belongs_to" do
     test "belongs_to __MODULE__", ctx do
       expected_types =

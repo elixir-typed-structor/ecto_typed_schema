@@ -112,9 +112,9 @@ defmodule EctoTypedSchema.FieldMacros do
     validate_typed_option!(name, typed)
 
     # Pass Ecto's default to typed options unless explicitly overridden
-    # Skip when typed has null: true (user explicitly wants nullable despite default)
+    # Skip nil defaults (they don't affect nullability) and when typed has null: true
     typed =
-      with {:ok, default} <- Keyword.fetch(opts, :default),
+      with {:ok, default} when not is_nil(default) <- Keyword.fetch(opts, :default),
            false <- Keyword.get(typed, :null) == true do
         Keyword.put_new(typed, :default, default)
       else
@@ -203,6 +203,8 @@ defmodule EctoTypedSchema.FieldMacros do
         {:ok, value} -> value
       end
 
+    define_field = Keyword.get(opts, :define_field, true)
+
     quote location: :keep do
       @ecto_typed_schema_typed {
         unquote(name),
@@ -213,12 +215,14 @@ defmodule EctoTypedSchema.FieldMacros do
         )
       }
 
-      @ecto_typed_schema_typed {unquote(foreign_key),
-                                unquote(
-                                  foreign_key_typed
-                                  |> Keyword.put(:schema, schema)
-                                  |> Macro.escape()
-                                )}
+      if unquote(define_field) do
+        @ecto_typed_schema_typed {unquote(foreign_key),
+                                  unquote(
+                                    foreign_key_typed
+                                    |> Keyword.put(:schema, schema)
+                                    |> Macro.escape()
+                                  )}
+      end
 
       Ecto.Schema.belongs_to(unquote(name), unquote(schema), unquote(opts))
     end

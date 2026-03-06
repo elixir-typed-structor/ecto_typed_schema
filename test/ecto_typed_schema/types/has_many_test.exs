@@ -147,6 +147,43 @@ defmodule EctoTypedSchema.Types.HasManyTest do
     end
   end
 
+  describe "through association with type override" do
+    test "uses custom type instead of resolved association type", ctx do
+      expected_types =
+        with_tmpmodule Schema, ctx do
+          use Ecto.Schema
+
+          schema "users" do
+            has_many :posts, Post, foreign_key: :user_id
+            has_many :post_tags, through: [:posts, :tags]
+          end
+
+          @type t() :: %__MODULE__{
+                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
+                  id: integer(),
+                  posts: Ecto.Schema.has_many(Post.t()),
+                  post_tags: list(Tag.t())
+                }
+        after
+          fetch_types!(Schema)
+        end
+
+      generated_types =
+        with_tmpmodule Schema, ctx do
+          use EctoTypedSchema
+
+          typed_schema "users" do
+            has_many :posts, Post, foreign_key: :user_id
+            has_many :post_tags, through: [:posts, :tags], typed: [type: list(Tag.t())]
+          end
+        after
+          fetch_types!(Schema)
+        end
+
+      assert_type(expected_types, generated_types)
+    end
+  end
+
   describe "self-referential" do
     test "generates correct types for self-referencing association", ctx do
       expected_types =
