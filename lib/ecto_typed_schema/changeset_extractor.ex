@@ -1,12 +1,5 @@
 defmodule EctoTypedSchema.ChangesetExtractor do
-  @moduledoc """
-  Extracts field names and their Ecto types from the AST of Ecto's
-  generated `__changeset__/0` function body.
-
-  The `__changeset__/0` function is defined by `Ecto.Schema` and returns
-  a map of `%{field_name => ecto_type}`. This module parses that AST at
-  compile time so `EctoTypedSchema` can map each field to an Elixir typespec.
-  """
+  @moduledoc false
 
   @typep field_entry() ::
            {atom(),

@@ -111,49 +111,6 @@ iex> t MyApp.Blog.Post
 @type t() :: %MyApp.Blog.Post{...}
 ```
 
-### Field-level Options
-
-Pass `typed: [...]` on any field or association to customize its generated type:
-
-| Option      | Effect                                       |
-|-------------|----------------------------------------------|
-| `type:`     | Override the inferred type entirely           |
-| `null:`     | `false` removes `\| nil` from the type        |
-| `enforce:`  | `true` adds the field to `@enforce_keys`       |
-| `default:`  | Struct default; non-nil defaults imply non-nullable |
-
-```elixir
-field :email, :string, typed: [null: false, enforce: true]
-field :role, :string, typed: [type: :admin | :user]
-```
-
-For `belongs_to`, the `:foreign_key` sub-option controls the FK field's type:
-
-```elixir
-belongs_to :org, Organization,
-  foreign_key: :org_id,
-  typed: [foreign_key: [type: Ecto.UUID.t()]]
-```
-
-### Schema-level Options
-
-`typed_schema/3` and `typed_embedded_schema/2` accept options that apply as
-defaults to every field (per-field `typed:` options override):
-
-```elixir
-typed_schema "users", null: false, enforce: true do
-  field :name, :string
-  field :bio, :string, typed: [null: true]  # override: nullable
-end
-```
-
-| Option        | Effect                                       |
-|---------------|----------------------------------------------|
-| `null:`       | Default nullability for all fields            |
-| `enforce:`    | Default enforce for all fields                |
-| `type_kind:`  | `:opaque`, `:typep`, etc. (default `:type`)   |
-| `type_name:`  | Custom type name (default `:t`)               |
-
 ## Options
 
 ### Type Parameters

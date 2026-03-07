@@ -1,19 +1,57 @@
 defmodule EctoTypedSchema do
   @external_resource "README.md"
+
   @moduledoc "README.md"
              |> File.read!()
              |> String.split("<!-- MODULEDOC -->", parts: 3)
              |> Enum.fetch!(1)
+             |> Kernel.<>("""
 
-  @doc """
-  Sets up the module to use EctoTypedSchema.
+             ## Typed Options
 
-  - Enables `TypedStructor` without defining a struct
-  - Enables `Ecto.Schema`
-  - Registers accumulation attributes for captured typed options
-  - Imports `typed_schema` / `typed_embedded_schema` macros
-  - Registers a `@before_compile` callback for TypedStructor generation
-  """
+             Pass `typed: [...]` on any field or association to customize its generated type:
+
+             | Option | Effect |
+             | --- | --- |
+             | `type:` | Override the inferred type entirely |
+             | `null:` | `false` removes `\\| nil` from the type |
+             | `enforce:` | `true` adds the field to `@enforce_keys` |
+             | `default:` | Struct default; non-nil defaults imply non-nullable |
+
+             ```elixir
+             field :email, :string, typed: [null: false, enforce: true]
+             field :role, :string, typed: [type: :admin | :user]
+             ```
+
+             For `belongs_to`, the `:foreign_key` sub-option controls the FK field's type:
+
+             ```elixir
+             belongs_to :org, Organization,
+               foreign_key: :org_id,
+               typed: [foreign_key: [type: Ecto.UUID.t()]]
+             ```
+
+             ## Schema-level Options
+
+             `typed_schema/3` and `typed_embedded_schema/2` accept options that apply as
+             defaults to every field (per-field `typed:` options override):
+
+             ```elixir
+             typed_schema "users", null: false, enforce: true do
+               field :name, :string
+               field :bio, :string, typed: [null: true]  # override: nullable
+             end
+             ```
+
+             | Option | Effect |
+             | --- | --- |
+             | `null:` | Default nullability for all fields |
+             | `enforce:` | Default enforce for all fields |
+             | `type_kind:` | `:opaque`, `:typep`, etc. (default `:type`) |
+             | `type_name:` | Custom type name (default `:t`) |
+             """)
+
+  @doc false
   @spec __using__(keyword()) :: Macro.t()
   defmacro __using__(_opts) do
     quote location: :keep do
@@ -47,10 +85,7 @@ defmodule EctoTypedSchema do
 
   def on_def(_env, _kind, _name, _args, _guards, _body), do: :ok
 
-  @doc """
-  `@before_compile` callback that reads captured field metadata and
-  generates a `typed_structor` block matching the Ecto schema fields.
-  """
+  @doc false
   @spec __before_compile__(Macro.Env.t()) :: Macro.t()
   defmacro __before_compile__(env) do
     changeset_info =
@@ -353,6 +388,258 @@ defmodule EctoTypedSchema do
     end
   end
 
+  # Builds delegation AST for wrapper macros that forward to FieldMacros.
+  defp delegate_to_field_macros(name, args) do
+    quote do
+      require EctoTypedSchema.FieldMacros
+      EctoTypedSchema.FieldMacros.unquote(name)(unquote_splicing(args))
+    end
+  end
+
+  @doc group: "Type Customization"
+  @doc """
+  Declares a type parameter for the schema's generated type.
+
+  Parameters make the generated type parameterized, e.g., `@type t(age) :: %__MODULE__{...}`.
+  They are passed through to `TypedStructor.parameter/2`.
+
+  ## Examples
+
+      typed_schema "users" do
+        parameter :age
+
+        field :name, :string
+        field :age, :integer, typed: [type: age]
+      end
+
+  This generates `@type t(age) :: %__MODULE__{...}` where the `:age` field
+  uses the type parameter instead of the inferred `integer()` type.
+  """
+  defmacro parameter(name, opts \\ []),
+    do: delegate_to_field_macros(:parameter, [name, opts])
+
+  @doc group: "Type Customization"
+  @doc """
+  Registers a `TypedStructor` plugin for the schema's generated type.
+
+  Plugins are forwarded to the `typed_structor` block generated at compile time.
+  They receive the `TypedStructor.Definition` and can modify types, add fields,
+  or inject code before/after the struct definition.
+
+  See `TypedStructor.Plugin` for the plugin behaviour and callbacks.
+
+  ## Examples
+
+      typed_schema "users" do
+        plugin MyPlugin, some_option: true
+
+        field :name, :string
+      end
+  """
+  defmacro plugin(plugin, opts \\ []),
+    do: delegate_to_field_macros(:plugin, [plugin, opts])
+
+  @doc group: "Fields and Associations"
+  @doc """
+  Defines a typed schema field that wraps `Ecto.Schema.field/3`.
+
+  ## Type Mapping
+
+  The generated type is inferred from the Ecto type. Common mappings include:
+
+  | Ecto Type | Elixir Typespec |
+  |---|---|
+  | `:string` | `String.t()` |
+  | `:integer` | `integer()` |
+  | `:float` | `float()` |
+  | `:boolean` | `boolean()` |
+  | `:binary` | `binary()` |
+  | `:decimal` | `Decimal.t()` |
+  | `:date` | `Date.t()` |
+  | `:time` / `:time_usec` | `Time.t()` |
+  | `:naive_datetime` / `:naive_datetime_usec` | `NaiveDateTime.t()` |
+  | `:utc_datetime` / `:utc_datetime_usec` | `DateTime.t()` |
+  | `:binary_id` | `Ecto.UUID.t()` |
+  | `:map` | `map()` |
+  | `{:array, inner}` | `list(inner_type)` |
+  | `Ecto.Enum` | Union of atom values (e.g., `:active \| :inactive`) |
+  | Custom module | `Module.t()` |
+
+  `Ecto.Enum` values are automatically captured and used to generate a union type.
+
+  See the ["Typed options"](`m:EctoTypedSchema#module-typed-options`) section in the
+  module documentation for more options.
+
+  ## Examples
+
+      field :name, :string
+      field :email, :string, typed: [null: false, enforce: true]
+      field :role, Ecto.Enum, values: [:admin, :user, :guest]
+  """
+  defmacro field(name, type \\ :string, opts \\ []),
+    do: delegate_to_field_macros(:field, [name, type, opts])
+
+  @doc group: "Fields and Associations"
+  @doc """
+  Defines a typed `Ecto.Schema.belongs_to/3` association.
+
+  Creates both the association field and its foreign key field. The association
+  is nullable by default.
+
+  ## Typed Options
+
+    * `:foreign_key` - a keyword list to customize the foreign key field's type independently
+
+  See the ["Typed options"](`m:EctoTypedSchema#module-typed-options`) section in the
+  module documentation for more options.
+
+  ## Examples
+
+      belongs_to :user, User, typed: [null: false]
+      belongs_to :organization, Organization,
+        foreign_key: :org_id,
+        typed: [foreign_key: [type: Ecto.UUID.t()]]
+  """
+  defmacro belongs_to(name, schema, opts \\ []),
+    do: delegate_to_field_macros(:belongs_to, [name, schema, opts])
+
+  @doc group: "Fields and Associations"
+  @doc """
+  Defines a typed `Ecto.Schema.has_one/3` association. Nullable by default.
+
+  See the ["Typed options"](`m:EctoTypedSchema#module-typed-options`) section in the
+  module documentation for more options.
+
+  ## Examples
+
+      has_one :profile, Profile
+      has_one :settings, Settings, typed: [null: false]
+  """
+  defmacro has_one(name, schema, opts \\ []),
+    do: delegate_to_field_macros(:has_one, [name, schema, opts])
+
+  @doc group: "Fields and Associations"
+  @doc """
+  Defines a typed `Ecto.Schema.has_many/3` association. Always non-nullable
+  (defaults to `[]`); the `:null` option has no effect.
+
+  Also supports through-associations via `has_many :name, through: [:assoc, :chain]`.
+
+  See the ["Typed options"](`m:EctoTypedSchema#module-typed-options`) section in the
+  module documentation for more options.
+
+  ## Examples
+
+      has_many :posts, Post, foreign_key: :user_id
+      has_many :post_tags, through: [:posts, :tags], typed: [type: list(Tag.t())]
+  """
+  defmacro has_many(name, schema, opts \\ []),
+    do: delegate_to_field_macros(:has_many, [name, schema, opts])
+
+  @doc group: "Fields and Associations"
+  @doc """
+  Defines a typed `Ecto.Schema.many_to_many/3` association. Always non-nullable
+  (defaults to `[]`); the `:null` option has no effect.
+
+  See the ["Typed options"](`m:EctoTypedSchema#module-typed-options`) section in the
+  module documentation for more options.
+
+  ## Examples
+
+      many_to_many :tags, Tag, join_through: "posts_tags", typed: [type: list(Tag.t())]
+  """
+  defmacro many_to_many(name, schema, opts \\ []),
+    do: delegate_to_field_macros(:many_to_many, [name, schema, opts])
+
+  @doc group: "Fields and Associations"
+  @doc """
+  Equivalent to `embeds_one/4` without a block. See `embeds_one/4` for
+  details and examples.
+  """
+  defmacro embeds_one(name, schema, opts \\ []),
+    do: delegate_to_field_macros(:embeds_one, [name, schema, opts])
+
+  @doc group: "Fields and Associations"
+  @doc """
+  Defines a typed `Ecto.Schema.embeds_one/3` embed. Nullable by default.
+
+  The optional `do` block allows defining the embedded schema inline.
+
+  See the ["Typed options"](`m:EctoTypedSchema#module-typed-options`) section in the
+  module documentation for more options.
+
+  ## Examples
+
+      embeds_one :address, Address
+      embeds_one :profile, Profile, typed: [null: false]
+
+      embeds_one :address, Address, primary_key: false do
+        field :street, :string
+        field :city, :string
+      end
+  """
+  defmacro embeds_one(name, schema, opts, do: block),
+    do: delegate_to_field_macros(:embeds_one, [name, schema, opts, [do: block]])
+
+  @doc group: "Fields and Associations"
+  @doc """
+  Equivalent to `embeds_many/4` without a block. See `embeds_many/4` for
+  details and examples.
+  """
+  defmacro embeds_many(name, schema, opts \\ []),
+    do: delegate_to_field_macros(:embeds_many, [name, schema, opts])
+
+  @doc group: "Fields and Associations"
+  @doc """
+  Defines a typed `Ecto.Schema.embeds_many/3` embed. Always non-nullable
+  (defaults to `[]`); the `:null` option has no effect.
+
+  The optional `do` block allows defining the embedded schema inline.
+
+  See the ["Typed options"](`m:EctoTypedSchema#module-typed-options`) section in the
+  module documentation for more options.
+
+  ## Examples
+
+      embeds_many :addresses, Address, typed: [enforce: true]
+
+      embeds_many :line_items, LineItem, primary_key: false do
+        field :product_name, :string
+        field :quantity, :integer
+        field :price, :decimal
+      end
+  """
+  defmacro embeds_many(name, schema, opts, do: block),
+    do: delegate_to_field_macros(:embeds_many, [name, schema, opts, [do: block]])
+
+  @doc group: "Fields and Associations"
+  @doc """
+  Defines typed timestamp fields that wrap `Ecto.Schema.timestamps/1`.
+
+  The single `:typed` option applies to **both** generated timestamp fields.
+
+  ## Timestamp Type Mapping
+
+  | Ecto Type | Elixir Typespec |
+  |---|---|
+  | `:naive_datetime` (default) | `NaiveDateTime.t()` |
+  | `:naive_datetime_usec` | `NaiveDateTime.t()` |
+  | `:utc_datetime` | `DateTime.t()` |
+  | `:utc_datetime_usec` | `DateTime.t()` |
+
+  See the ["Typed options"](`m:EctoTypedSchema#module-typed-options`) section in the
+  module documentation for more options.
+
+  ## Examples
+
+      timestamps()
+      timestamps(type: :utc_datetime)
+      timestamps(typed: [null: false])
+  """
+  defmacro timestamps(opts \\ []),
+    do: delegate_to_field_macros(:timestamps, [opts])
+
+  @doc group: "Schema"
   @doc """
   Defines a typed Ecto schema that delegates directly to `Ecto.Schema.schema/2`.
 
@@ -367,6 +654,7 @@ defmodule EctoTypedSchema do
     end
   end
 
+  @doc group: "Schema"
   @doc """
   Defines a typed Ecto schema with schema-level options.
 
@@ -383,13 +671,8 @@ defmodule EctoTypedSchema do
     * `:type_kind` - the kind of type to generate (e.g., `:opaque`)
     * `:type_name` - custom name for the generated type (default: `:t`)
 
-  ## How `:default`, `:enforce` and `:null` affect the generated type
-
-  These options follow TypedStructor's semantics:
-
-    * `null: false` -- non-nullable type (e.g., `String.t()` not `String.t() | nil`)
-    * `enforce: true` -- field is added to `@enforce_keys`
-    * `default: value` -- struct default; also implies non-nullable when non-nil
+  See the ["Schema-level Options"](`m:EctoTypedSchema#module-schema-level-options`)
+  section in the module documentation for more details.
 
   ## Examples
 
@@ -406,12 +689,40 @@ defmodule EctoTypedSchema do
 
       Ecto.Schema.schema unquote(source) do
         import Ecto.Schema, only: []
-        import EctoTypedSchema.FieldMacros
+
+        import EctoTypedSchema,
+          only: [
+            field: 1,
+            field: 2,
+            field: 3,
+            belongs_to: 2,
+            belongs_to: 3,
+            has_one: 2,
+            has_one: 3,
+            has_many: 2,
+            has_many: 3,
+            many_to_many: 2,
+            many_to_many: 3,
+            embeds_one: 2,
+            embeds_one: 3,
+            embeds_one: 4,
+            embeds_many: 2,
+            embeds_many: 3,
+            embeds_many: 4,
+            timestamps: 0,
+            timestamps: 1,
+            parameter: 1,
+            parameter: 2,
+            plugin: 1,
+            plugin: 2
+          ]
+
         unquote(block)
       end
     end
   end
 
+  @doc group: "Schema"
   @doc """
   Defines a typed embedded Ecto schema that delegates to `Ecto.Schema.embedded_schema/1`.
 
@@ -426,6 +737,7 @@ defmodule EctoTypedSchema do
     end
   end
 
+  @doc group: "Schema"
   @doc """
   Defines a typed embedded Ecto schema with schema-level options.
 
@@ -433,33 +745,24 @@ defmodule EctoTypedSchema do
   `@type t()` generation. Embedded schemas do not include a `__meta__`
   field in their generated type.
 
-  ## Options
+  ## Schema-level Options
 
-  Schema-level options that apply to all fields:
+  Options that apply as defaults to every field (individual fields
+  can override via their `:typed` option):
 
-    * `:enforce` - If `true`, adds all fields to `@enforce_keys` (unless overridden per-field)
-    * `:null` - If `false`, makes all field types non-nullable (unless overridden per-field)
+    * `:enforce` - if `true`, adds all fields to `@enforce_keys`
+    * `:null` - if `false`, makes all field types non-nullable
+    * `:type_kind` - the kind of type to generate (e.g., `:opaque`)
+    * `:type_name` - custom name for the generated type (default: `:t`)
 
-  Individual fields can override these options via their `:typed` option.
+  See the ["Schema-level Options"](`m:EctoTypedSchema#module-schema-level-options`)
+  section in the module documentation for more details.
 
   ## Examples
 
-      defmodule Settings do
-        use EctoTypedSchema
-
-        typed_embedded_schema null: false do
-          field :theme, :string
-          field :notifications_enabled, :boolean
-        end
-      end
-
-      defmodule Metadata do
-        use EctoTypedSchema
-
-        typed_embedded_schema null: false do
-          field :version, :integer
-          field :description, :string, typed: [null: true]  # Override: nullable
-        end
+      typed_embedded_schema null: false do
+        field :theme, :string
+        field :bio, :string, typed: [null: true]  # override: nullable
       end
   """
   @spec typed_embedded_schema(keyword(), keyword()) :: Macro.t()
@@ -469,7 +772,34 @@ defmodule EctoTypedSchema do
 
       Ecto.Schema.embedded_schema do
         import Ecto.Schema, only: []
-        import EctoTypedSchema.FieldMacros
+
+        import EctoTypedSchema,
+          only: [
+            field: 1,
+            field: 2,
+            field: 3,
+            belongs_to: 2,
+            belongs_to: 3,
+            has_one: 2,
+            has_one: 3,
+            has_many: 2,
+            has_many: 3,
+            many_to_many: 2,
+            many_to_many: 3,
+            embeds_one: 2,
+            embeds_one: 3,
+            embeds_one: 4,
+            embeds_many: 2,
+            embeds_many: 3,
+            embeds_many: 4,
+            timestamps: 0,
+            timestamps: 1,
+            parameter: 1,
+            parameter: 2,
+            plugin: 1,
+            plugin: 2
+          ]
+
         unquote(block)
       end
     end

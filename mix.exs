@@ -25,7 +25,12 @@ defmodule EctoTypedSchema.MixProject do
           {"README.md", [title: "Introduction"]},
           "LICENSE"
         ],
-        skip_undefined_reference_warnings_on: ["Ecto.Association"]
+        skip_undefined_reference_warnings_on: ["Ecto.Association"],
+        groups_for_docs: [
+          Schema: &(&1[:group] == "Schema"),
+          "Fields and Associations": &(&1[:group] == "Fields and Associations"),
+          "Type Customization": &(&1[:group] == "Type Customization")
+        ]
       ],
       package: [
         name: "ecto_typed_schema",
