@@ -2,7 +2,7 @@
 
 [![Hex.pm](https://img.shields.io/hexpm/v/ecto_typed_schema.svg)](https://hex.pm/packages/ecto_typed_schema)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/ecto_typed_schema)
-[![CI](https://github.com/fahchen/ecto_typed_schema/actions/workflows/elixir.yml/badge.svg)](https://github.com/fahchen/ecto_typed_schema/actions/workflows/elixir.yml)
+[![CI](https://github.com/elixir-typed-structor/ecto_typed_schema/actions/workflows/elixir.yml/badge.svg)](https://github.com/elixir-typed-structor/ecto_typed_schema/actions/workflows/elixir.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Ecto schemas don't generate `@type t()` specs. You either maintain them by hand
@@ -64,7 +64,7 @@ end
 ```elixir
 def deps do
   [
-    {:ecto_typed_schema, github: "fahchen/ecto_typed_schema"},
+    {:ecto_typed_schema, github: "elixir-typed-structor/ecto_typed_schema"},
     {:ecto, "~> 3.10"}
   ]
 end

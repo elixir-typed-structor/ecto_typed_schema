@@ -2,7 +2,7 @@ defmodule EctoTypedSchema.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @source_url "https://github.com/fahchen/ecto_typed_schema"
+  @source_url "https://github.com/elixir-typed-structor/ecto_typed_schema"
 
   def project do
     [
