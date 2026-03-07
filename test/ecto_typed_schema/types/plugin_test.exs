@@ -46,7 +46,7 @@ defmodule EctoTypedSchema.Types.PluginTest do
   end
 
   # Makes all fields non-nullable via before_definition.
-  defmodule EnforceNonNullPlugin do
+  defmodule NonNullPlugin do
     use TypedStructor.Plugin
 
     @impl TypedStructor.Plugin
@@ -54,7 +54,7 @@ defmodule EctoTypedSchema.Types.PluginTest do
       quote do
         Map.update!(unquote(definition), :fields, fn fields ->
           Enum.map(fields, fn field ->
-            Keyword.put(field, :enforce, true)
+            Keyword.put(field, :null, false)
           end)
         end)
       end
@@ -120,7 +120,7 @@ defmodule EctoTypedSchema.Types.PluginTest do
   end
 
   describe "before_definition modifies type output" do
-    test "plugin enforcing all fields changes the generated type", ctx do
+    test "plugin setting all fields non-nullable changes the generated type", ctx do
       generated_types =
         with_tmpmodule Schema, ctx do
           use EctoTypedSchema
@@ -128,7 +128,7 @@ defmodule EctoTypedSchema.Types.PluginTest do
           @primary_key false
 
           typed_embedded_schema do
-            plugin EctoTypedSchema.Types.PluginTest.EnforceNonNullPlugin
+            plugin EctoTypedSchema.Types.PluginTest.NonNullPlugin
 
             field :name, :string
             field :age, :integer
@@ -148,8 +148,8 @@ defmodule EctoTypedSchema.Types.PluginTest do
             field :age, :integer
           end
 
-          # EnforceNonNullPlugin adds enforce: true to all fields,
-          # which TypedStructor interprets as non-nullable.
+          # NonNullPlugin adds null: false to all fields,
+          # making them non-nullable in the generated type.
           @type t() :: %__MODULE__{
                   name: String.t(),
                   age: integer()

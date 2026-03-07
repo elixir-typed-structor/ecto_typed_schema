@@ -52,7 +52,7 @@ EctoTypedSchema generates `@type` specs from Ecto schema definitions by combinin
 
 ## Supported Features You Must Preserve
 
-- Schema-level defaults: `null`, `enforce`, plus `type_kind` and `type_name`
+- Schema-level defaults: `null`, plus `type_kind` and `type_name`
 - Type parameters via `parameter/2` with declaration-order preservation
 - TypedStructor plugin forwarding via `plugin/2` with declaration-order preservation
 - Through-association type generation for fields absent from `__changeset__/0`

@@ -151,40 +151,6 @@ defmodule EctoTypedSchema.Types.HasOneTest do
     end
   end
 
-  describe "with enforce: true" do
-    test "makes association non-nullable", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "users" do
-            has_one :profile, Profile, foreign_key: :user_id
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  profile: Ecto.Schema.has_one(Profile.t())
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "users" do
-            has_one :profile, Profile, foreign_key: :user_id, typed: [enforce: true]
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
   describe "with schema-level null: false" do
     test "propagates to has_one", ctx do
       expected_types =

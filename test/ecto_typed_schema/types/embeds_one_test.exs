@@ -88,40 +88,6 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
     end
   end
 
-  describe "with enforce: true" do
-    test "makes embed non-nullable", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "users" do
-            embeds_one :address, Address
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  address: Ecto.Schema.embeds_one(Address.t())
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "users" do
-            embeds_one :address, Address, typed: [enforce: true]
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
   describe "with null: false" do
     test "makes embed non-nullable", ctx do
       expected_types =
@@ -249,43 +215,6 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
 
           typed_schema "users" do
             embeds_one :address, Address, on_replace: :delete
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
-  describe "field-level override of schema options" do
-    test "field enforce: false overrides schema enforce: true", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "users" do
-            embeds_one :address, Address
-            embeds_one :billing_address, Address
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  address: Ecto.Schema.embeds_one(Address.t()) | nil,
-                  billing_address: Ecto.Schema.embeds_one(Address.t())
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "users", enforce: true do
-            embeds_one :address, Address, typed: [enforce: false, null: true]
-            embeds_one :billing_address, Address
           end
         after
           fetch_types!(Schema)

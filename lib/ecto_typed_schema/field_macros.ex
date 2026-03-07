@@ -18,7 +18,7 @@ defmodule EctoTypedSchema.FieldMacros do
   @spec field(atom(), atom() | module(), keyword()) :: Macro.t()
   defmacro field(name, type \\ :string, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
-    validate_typed_option!(name, typed)
+    typed = sanitize_typed_opts(typed)
 
     # Propagate non-nil Ecto defaults to typed opts so TypedStructor sees them,
     # unless the field is explicitly nullable (null: true).
@@ -50,33 +50,30 @@ defmodule EctoTypedSchema.FieldMacros do
     end
   end
 
-  @spec validate_typed_option!(atom(), term()) :: :ok
-  defp validate_typed_option!(field_name, typed) do
-    unless Keyword.keyword?(typed) do
-      raise ArgumentError,
-            "field :#{field_name} option :typed must be a keyword list, got: #{inspect(typed)}"
-    end
+  @supported_typed_keys [:type, :null, :default, :enum_values, :through, :foreign_key]
 
-    :ok
-  end
+  @spec sanitize_typed_opts(keyword()) :: keyword()
+  defp sanitize_typed_opts(typed), do: Keyword.take(typed, @supported_typed_keys)
 
   @spec belongs_to(atom(), module(), keyword()) :: Macro.t()
   defmacro belongs_to(name, schema, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
-    validate_typed_option!(name, typed)
+    typed = sanitize_typed_opts(typed)
     {foreign_key_typed, typed} = Keyword.pop(typed, :foreign_key, [])
-
-    # Propagate null/enforce from association to FK unless FK explicitly overrides
-    foreign_key_typed =
-      typed
-      |> Keyword.take([:null, :enforce])
-      |> Keyword.merge(foreign_key_typed)
 
     foreign_key =
       case Keyword.fetch(opts, :foreign_key) do
         :error -> :"#{name}_id"
         {:ok, value} -> value
       end
+
+    foreign_key_typed = sanitize_typed_opts(foreign_key_typed)
+
+    # Propagate null from association to FK unless FK explicitly overrides
+    foreign_key_typed =
+      typed
+      |> Keyword.take([:null])
+      |> Keyword.merge(foreign_key_typed)
 
     define_field = Keyword.get(opts, :define_field, true)
 
@@ -94,7 +91,7 @@ defmodule EctoTypedSchema.FieldMacros do
   @spec has_one(atom(), module() | keyword(), keyword()) :: Macro.t()
   defmacro has_one(name, schema, opts \\ []) do
     {typed, schema, opts} = extract_has_typed_opts(schema, opts)
-    validate_typed_option!(name, typed)
+    typed = sanitize_typed_opts(typed)
 
     quote location: :keep do
       @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
@@ -106,7 +103,7 @@ defmodule EctoTypedSchema.FieldMacros do
   @spec embeds_one(atom(), module(), keyword()) :: Macro.t()
   defmacro embeds_one(name, schema, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
-    validate_typed_option!(name, typed)
+    typed = sanitize_typed_opts(typed)
 
     quote location: :keep do
       @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
@@ -118,7 +115,7 @@ defmodule EctoTypedSchema.FieldMacros do
   @spec embeds_one(atom(), module(), keyword(), keyword()) :: Macro.t()
   defmacro embeds_one(name, schema, opts, do: block) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
-    validate_typed_option!(name, typed)
+    typed = sanitize_typed_opts(typed)
 
     quote location: :keep do
       @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
@@ -130,7 +127,7 @@ defmodule EctoTypedSchema.FieldMacros do
   @spec embeds_many(atom(), module(), keyword()) :: Macro.t()
   defmacro embeds_many(name, schema, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
-    validate_typed_option!(name, typed)
+    typed = sanitize_typed_opts(typed)
 
     quote location: :keep do
       @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
@@ -142,7 +139,7 @@ defmodule EctoTypedSchema.FieldMacros do
   @spec embeds_many(atom(), module(), keyword(), keyword()) :: Macro.t()
   defmacro embeds_many(name, schema, opts, do: block) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
-    validate_typed_option!(name, typed)
+    typed = sanitize_typed_opts(typed)
 
     quote location: :keep do
       @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
@@ -154,7 +151,7 @@ defmodule EctoTypedSchema.FieldMacros do
   @spec has_many(atom(), module() | keyword(), keyword()) :: Macro.t()
   defmacro has_many(name, schema, opts \\ []) do
     {typed, schema, opts} = extract_has_typed_opts(schema, opts)
-    validate_typed_option!(name, typed)
+    typed = sanitize_typed_opts(typed)
 
     quote location: :keep do
       @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
@@ -166,7 +163,7 @@ defmodule EctoTypedSchema.FieldMacros do
   @spec many_to_many(atom(), module(), keyword()) :: Macro.t()
   defmacro many_to_many(name, schema, opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
-    validate_typed_option!(name, typed)
+    typed = sanitize_typed_opts(typed)
 
     quote location: :keep do
       @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
@@ -178,7 +175,7 @@ defmodule EctoTypedSchema.FieldMacros do
   @spec timestamps(keyword()) :: Macro.t()
   defmacro timestamps(opts \\ []) do
     {typed, opts} = Keyword.pop(opts, :typed, [])
-    validate_typed_option!(:timestamps, typed)
+    typed = sanitize_typed_opts(typed)
 
     quote location: :keep do
       # Merge @timestamps_opts (if defined) with explicit opts.

@@ -125,14 +125,14 @@ defmodule TypeTestCase do
     Code.compiler_options(docs: true, debug_info: true)
 
     case Kernel.ParallelCompiler.compile_to_path(List.wrap(path), dir, return_diagnostics: true) do
-      {:ok, modules, []} ->
+      {:ok, modules, _} ->
         modules
 
-      {:ok, modules, _warnings} ->
-        modules
+      {:error, [%{message: message, file: file, position: position} | _], _} ->
+        raise CompileError, file: file, line: position, description: message
 
-      {:error, [{file, code_position, message} | _errors], _warnings} ->
-        raise CompileError, file: file, line: code_position, description: message
+      {:error, [{file, position, message} | _], _} ->
+        raise CompileError, file: file, line: position, description: message
     end
   end
 

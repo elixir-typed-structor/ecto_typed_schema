@@ -175,40 +175,6 @@ defmodule EctoTypedSchema.Types.ManyToManyTest do
     end
   end
 
-  describe "with enforce: true" do
-    test "type stays non-nullable, field added to enforce_keys", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "posts" do
-            many_to_many :tags, Tag, join_through: "posts_tags"
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  tags: Ecto.Schema.many_to_many(Tag.t())
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "posts" do
-            many_to_many :tags, Tag, join_through: "posts_tags", typed: [enforce: true]
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
   describe "with schema-level null: false" do
     test "many_to_many stays non-nullable", ctx do
       expected_types =

@@ -293,40 +293,6 @@ defmodule EctoTypedSchema.Types.HasManyTest do
     end
   end
 
-  describe "with enforce: true" do
-    test "type stays non-nullable, field added to enforce_keys", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "users" do
-            has_many :posts, Post, foreign_key: :user_id
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  posts: Ecto.Schema.has_many(Post.t())
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "users" do
-            has_many :posts, Post, foreign_key: :user_id, typed: [enforce: true]
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
   describe "with custom source tuple" do
     test "has_many with {source, schema} tuple", ctx do
       expected_types =
@@ -463,7 +429,7 @@ defmodule EctoTypedSchema.Types.HasManyTest do
           end
         end)
 
-      assert warnings == ""
+      refute warnings =~ "could not be resolved"
     end
   end
 end

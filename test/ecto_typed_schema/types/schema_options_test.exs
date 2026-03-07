@@ -3,43 +3,6 @@ defmodule EctoTypedSchema.Types.SchemaOptionsTest do
 
   @compile {:no_warn_undefined, __MODULE__.Schema}
 
-  describe "schema-level enforce: true" do
-    test "applies to all fields", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "test" do
-            field :name, :string
-            field :age, :integer
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  name: String.t(),
-                  age: integer()
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "test", enforce: true do
-            field :name, :string
-            field :age, :integer
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
   describe "schema-level null: false" do
     test "applies to all fields", ctx do
       expected_types =
@@ -180,80 +143,6 @@ defmodule EctoTypedSchema.Types.SchemaOptionsTest do
     end
   end
 
-  describe "field-level enforce: false overrides schema-level enforce: true" do
-    test "field becomes nullable when enforce is overridden", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "test" do
-            field :name, :string
-            field :optional, :string
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  name: String.t(),
-                  optional: String.t() | nil
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "test", enforce: true do
-            field :name, :string
-            field :optional, :string, typed: [enforce: false, null: true]
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
-  describe "combined schema-level options" do
-    test "enforce: true and null: false together", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "test" do
-            field :name, :string
-            field :age, :integer
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  name: String.t(),
-                  age: integer()
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "test", enforce: true, null: false do
-            field :name, :string
-            field :age, :integer
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
   describe "schema-level options with custom primary key" do
     test "null: false with binary_id primary key", ctx do
       expected_types =
@@ -357,48 +246,6 @@ defmodule EctoTypedSchema.Types.SchemaOptionsTest do
 
           typed_schema "test" do
             field :name, :string
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
-  describe "default: false with schema-level enforce: true" do
-    test "falsy default still skips enforce", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          @primary_key false
-
-          embedded_schema do
-            field :enforced_by_default, :integer
-            field :with_default, :integer
-            field :with_false_default, :boolean
-          end
-
-          @type t() :: %__MODULE__{
-                  enforced_by_default: integer(),
-                  with_default: integer(),
-                  with_false_default: boolean()
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          @primary_key false
-
-          typed_embedded_schema enforce: true do
-            field :enforced_by_default, :integer
-            field :with_default, :integer, default: 1
-            field :with_false_default, :boolean, default: false
           end
         after
           fetch_types!(Schema)
