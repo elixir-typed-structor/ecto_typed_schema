@@ -49,8 +49,8 @@ end
 
 - **Zero-annotation inference** -- Ecto types mapped to typespecs automatically (`:string` -> `String.t()`, `:integer` -> `integer()`, etc.)
 - **Association-aware** -- `belongs_to`, `has_many`, `has_one`, `many_to_many`, and embeds all generate correct types
-- **Ecto runtime semantics** -- primary keys non-nullable, `has_many`/`embeds_many` default to `[]`, everything else nullable
-- **Fine-grained control** -- override per-field with `typed: [null: false]`, `typed: [type: ...]`, or `typed: [enforce: true]`
+- **Ecto runtime semantics** -- primary keys non-nullable, `has_many`/`embeds_many` default to `[]`, and most other fields nullable
+- **Fine-grained control** -- override per-field with `typed: [null: false]`, `typed: [type: ...]`, or `typed: [enforce: true]` (type-level requiredness)
 - **Schema-level defaults** -- set `null:`, `enforce:`, `type_kind:`, `type_name:` for all fields at once
 - **Through associations** -- resolved at compile time with fallback warning
 - **Plugin system** -- forward [TypedStructor plugins](https://hexdocs.pm/typed_structor/TypedStructor.Plugin.html) into the generated type block

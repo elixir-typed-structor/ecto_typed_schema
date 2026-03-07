@@ -80,5 +80,5 @@ Recommended sequence:
 
 ## Dependencies
 
-- `typed_structor` from GitHub branch `feat/null-option-and-readme`
+- `typed_structor` `~> 0.6` (Hex package)
 - `ecto` `~> 3.10`
