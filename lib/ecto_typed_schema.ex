@@ -15,17 +15,12 @@ defmodule EctoTypedSchema do
              | --- | --- |
              | `type:` | Override the inferred type entirely |
              | `null:` | `false` removes `\\| nil` from the type |
-             | `enforce:` | `true` treats the field as required for type generation (non-nullable unless `default:` is set) |
              | `default:` | Type metadata default; non-nil defaults imply non-nullable (runtime defaults come from Ecto `default:`) |
 
              ```elixir
-             field :email, :string, typed: [null: false, enforce: true]
+             field :email, :string, typed: [null: false]
              field :role, :string, typed: [type: :admin | :user]
              ```
-
-             `EctoTypedSchema` uses `TypedStructor` in `define_struct: false` mode, so
-             `typed: [enforce: true]` affects generated types but does not set runtime
-             `@enforce_keys`.
 
              For `belongs_to`, the `:foreign_key` sub-option controls the FK field's type:
 
@@ -41,7 +36,7 @@ defmodule EctoTypedSchema do
              defaults to every field (per-field `typed:` options override):
 
              ```elixir
-             typed_schema "users", null: false, enforce: true do
+             typed_schema "users", null: false do
                field :name, :string
                field :bio, :string, typed: [null: true]  # override: nullable
              end
@@ -50,7 +45,6 @@ defmodule EctoTypedSchema do
              | Option | Effect |
              | --- | --- |
              | `null:` | Default nullability for all fields |
-             | `enforce:` | Default type-level requiredness for all fields (does not set runtime `@enforce_keys`) |
              | `type_kind:` | `:opaque`, `:typep`, etc. (default `:type`) |
              | `type_name:` | Custom type name (default `:t`) |
              """)
@@ -103,7 +97,8 @@ defmodule EctoTypedSchema do
       |> Map.new()
 
     schema_opts = Module.get_attribute(env.module, :ecto_typed_schema_opts, [])
-    schema_defaults = Keyword.take(schema_opts, [:enforce, :null])
+
+    schema_defaults = Keyword.take(schema_opts, [:null])
     primary_keys = Module.get_attribute(env.module, :ecto_primary_keys, [])
 
     fields_ast = build_fields_ast(changeset_info, override_map, schema_defaults, primary_keys)
@@ -253,15 +248,15 @@ defmodule EctoTypedSchema do
       typed_structor unquote(opts) do
         unquote(plugins)
         unquote(parameters)
-        field :__meta__, Ecto.Schema.Metadata.t(__MODULE__), enforce: true
+        field :__meta__, Ecto.Schema.Metadata.t(__MODULE__), null: false
         unquote(fields)
         unquote(additional_fields)
       end
     end
   end
 
-  # Merges precomputed schema-level defaults (`:enforce`, `:null`) with
-  # per-field options. Field-level options take precedence.
+  # Merges precomputed schema-level defaults (`:null`) with per-field options.
+  # Field-level options take precedence.
   @spec merge_schema_opts(keyword(), keyword()) :: keyword()
   defp merge_schema_opts(field_opts, schema_defaults) do
     Keyword.merge(schema_defaults, field_opts)
@@ -477,7 +472,7 @@ defmodule EctoTypedSchema do
   ## Examples
 
       field :name, :string
-      field :email, :string, typed: [null: false, enforce: true]
+      field :email, :string, typed: [null: false]
       field :role, Ecto.Enum, values: [:admin, :user, :guest]
   """
   defmacro field(name, type \\ :string, opts \\ []),
@@ -605,7 +600,7 @@ defmodule EctoTypedSchema do
 
   ## Examples
 
-      embeds_many :addresses, Address, typed: [enforce: true]
+      embeds_many :addresses, Address
 
       embeds_many :line_items, LineItem, primary_key: false do
         field :product_name, :string
@@ -670,8 +665,6 @@ defmodule EctoTypedSchema do
   Options that apply as defaults to every field (individual fields
   can override via their `:typed` option):
 
-    * `:enforce` - if `true`, marks fields as required for type generation
-      (non-nullable unless a default is present)
     * `:null` - if `false`, makes all field types non-nullable
     * `:type_kind` - the kind of type to generate (e.g., `:opaque`)
     * `:type_name` - custom name for the generated type (default: `:t`)
@@ -755,8 +748,6 @@ defmodule EctoTypedSchema do
   Options that apply as defaults to every field (individual fields
   can override via their `:typed` option):
 
-    * `:enforce` - if `true`, marks fields as required for type generation
-      (non-nullable unless a default is present)
     * `:null` - if `false`, makes all field types non-nullable
     * `:type_kind` - the kind of type to generate (e.g., `:opaque`)
     * `:type_name` - custom name for the generated type (default: `:t`)

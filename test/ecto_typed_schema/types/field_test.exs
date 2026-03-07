@@ -489,40 +489,6 @@ defmodule EctoTypedSchema.Types.FieldTest do
     end
   end
 
-  describe "field with enforce: true" do
-    test "makes type non-nullable", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "test" do
-            field :name, :string
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  name: String.t()
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "test" do
-            field :name, :string, typed: [enforce: true]
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
   describe "field with default value" do
     test "non-nullable when default is set", ctx do
       expected_types =
@@ -730,38 +696,6 @@ defmodule EctoTypedSchema.Types.FieldTest do
 
           typed_schema "test" do
             field :status, :string, typed: [type: :active | :inactive, null: false]
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-
-    test "custom type with enforce: true", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "test" do
-            field :status, :string
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  status: :active | :inactive
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "test" do
-            field :status, :string, typed: [type: :active | :inactive, enforce: true]
           end
         after
           fetch_types!(Schema)

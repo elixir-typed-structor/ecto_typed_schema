@@ -302,44 +302,6 @@ defmodule EctoTypedSchema.Types.TimestampsTest do
     end
   end
 
-  describe "with schema-level enforce: true" do
-    test "timestamps become enforced non-nullable", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "test" do
-            field :name, :string
-            timestamps()
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  name: String.t(),
-                  inserted_at: NaiveDateTime.t(),
-                  updated_at: NaiveDateTime.t()
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "test", enforce: true do
-            field :name, :string
-            timestamps()
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
   describe "in embedded_schema" do
     test "timestamps work inside typed_embedded_schema", ctx do
       expected_types =
@@ -403,41 +365,6 @@ defmodule EctoTypedSchema.Types.TimestampsTest do
 
           typed_schema "test" do
             timestamps(typed: [null: false])
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
-  describe "with typed: [enforce: true]" do
-    test "generates enforced non-nullable timestamp types", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "test" do
-            timestamps()
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  inserted_at: NaiveDateTime.t(),
-                  updated_at: NaiveDateTime.t()
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "test" do
-            timestamps(typed: [enforce: true])
           end
         after
           fetch_types!(Schema)

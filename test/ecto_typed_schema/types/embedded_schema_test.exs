@@ -39,42 +39,6 @@ defmodule EctoTypedSchema.Types.EmbeddedSchemaTest do
     end
   end
 
-  describe "with schema-level enforce: true" do
-    test "all fields are non-nullable", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          embedded_schema do
-            field :name, :string
-            field :age, :integer
-          end
-
-          @type t() :: %__MODULE__{
-                  id: Ecto.UUID.t(),
-                  name: String.t(),
-                  age: integer()
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_embedded_schema enforce: true do
-            field :name, :string
-            field :age, :integer
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
   describe "with schema-level null: false" do
     test "all fields are non-nullable", ctx do
       expected_types =
@@ -324,42 +288,6 @@ defmodule EctoTypedSchema.Types.EmbeddedSchemaTest do
           typed_embedded_schema do
             field :name, :string
             embeds_many :items, InnerEmbed
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
-  describe "combined schema-level options" do
-    test "enforce: true and null: false together", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          embedded_schema do
-            field :name, :string
-            field :age, :integer
-          end
-
-          @type t() :: %__MODULE__{
-                  id: Ecto.UUID.t(),
-                  name: String.t(),
-                  age: integer()
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_embedded_schema enforce: true, null: false do
-            field :name, :string
-            field :age, :integer
           end
         after
           fetch_types!(Schema)

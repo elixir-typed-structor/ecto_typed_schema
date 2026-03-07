@@ -118,41 +118,6 @@ defmodule EctoTypedSchema.Types.BelongsToTest do
     end
   end
 
-  describe "with enforce: true" do
-    test "makes association non-nullable", ctx do
-      expected_types =
-        with_tmpmodule Schema, ctx do
-          use Ecto.Schema
-
-          schema "posts" do
-            belongs_to :author, User
-          end
-
-          @type t() :: %__MODULE__{
-                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
-                  id: integer(),
-                  author: Ecto.Schema.belongs_to(User.t()),
-                  author_id: integer()
-                }
-        after
-          fetch_types!(Schema)
-        end
-
-      generated_types =
-        with_tmpmodule Schema, ctx do
-          use EctoTypedSchema
-
-          typed_schema "posts" do
-            belongs_to :author, User, typed: [enforce: true]
-          end
-        after
-          fetch_types!(Schema)
-        end
-
-      assert_type(expected_types, generated_types)
-    end
-  end
-
   describe "with custom FK type" do
     test "overrides foreign key type", ctx do
       expected_types =
