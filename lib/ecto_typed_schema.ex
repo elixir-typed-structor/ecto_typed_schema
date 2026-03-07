@@ -1,24 +1,9 @@
 defmodule EctoTypedSchema do
-  @moduledoc """
-  Generates accurate `@type t()` specifications for Ecto schemas by
-  combining `Ecto.Schema` field definitions with `TypedStructor` type
-  generation.
-
-  ## Usage
-
-      defmodule MyApp.User do
-        use EctoTypedSchema
-
-        typed_schema "users" do
-          field :name, :string
-          field :age, :integer, typed: [null: false]
-          has_many :posts, MyApp.Post
-        end
-      end
-
-  The above generates a `@type t()` where `:name` is `String.t() | nil`,
-  `:age` is `integer()`, and `:posts` is `Ecto.Schema.has_many(MyApp.Post.t())`.
-  """
+  @external_resource "README.md"
+  @moduledoc "README.md"
+             |> File.read!()
+             |> String.split("<!-- MODULEDOC -->", parts: 3)
+             |> Enum.fetch!(1)
 
   @doc """
   Sets up the module to use EctoTypedSchema.

@@ -1,34 +1,76 @@
 defmodule EctoTypedSchema.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+  @source_url "https://github.com/fahchen/ecto_typed_schema"
+
   def project do
     [
       app: :ecto_typed_schema,
-      version: "0.1.0",
       elixir: "~> 1.17",
+      description: "Auto-generate accurate @type t() specs from your Ecto schema definitions.",
+      version: @version,
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      consolidate_protocols: Mix.env() != :test,
       deps: deps(),
-      elixirc_paths: elixirc_paths(Mix.env())
+      name: "EctoTypedSchema",
+      source_url: @source_url,
+      homepage_url: @source_url,
+      docs: [
+        main: "readme",
+        source_url: @source_url,
+        source_ref: "v#{@version}",
+        extras: [
+          {"README.md", [title: "Introduction"]},
+          "LICENSE"
+        ],
+        skip_undefined_reference_warnings_on: ["Ecto.Association"]
+      ],
+      package: [
+        name: "ecto_typed_schema",
+        licenses: ["MIT"],
+        links: %{
+          "GitHub" => @source_url
+        }
+      ],
+      dialyzer: [
+        plt_add_apps: [:ex_unit]
+      ],
+      aliases: aliases()
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
+  def cli do
+    [preferred_envs: [precommit: :test]]
+  end
+
   def application do
     [
       extra_applications: [:logger]
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # FIXME: change back to hex package when published
-      {:typed_structor,
-       github: "elixir-typed-structor/typed_structor", branch: "feat/null-option-and-readme"},
-      {:ecto, "~> 3.10"}
+      {:typed_structor, "~> 0.6"},
+      {:ecto, "~> 3.10"},
+      {:ex_doc, "~> 0.31", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(_env), do: ["lib"]
+  defp elixirc_paths(_), do: ["lib"]
+
+  defp aliases do
+    [
+      precommit: [
+        "format",
+        "compile --warnings-as-errors",
+        "dialyzer",
+        "test"
+      ]
+    ]
+  end
 end

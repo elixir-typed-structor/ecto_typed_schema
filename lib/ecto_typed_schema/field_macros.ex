@@ -7,22 +7,6 @@ defmodule EctoTypedSchema.FieldMacros do
   `@type t()` specifications. Each macro wraps its corresponding
   `Ecto.Schema` macro while extracting the `:typed` option for type
   customization.
-
-  ## Type Generation Overview
-
-  The type for each field is determined by:
-
-  1. If `:typed` option specifies a custom `:type`, that type is used directly
-  2. Otherwise, the type is inferred from the Ecto type using `EctoTypedSchema.TypeMapper`
-
-  ## Common `:typed` Options
-
-  All field macros support these options in the `:typed` keyword list:
-
-    * `:type` - Override the inferred type with a custom type specification
-    * `:enforce` - If `true`, adds the field to `@enforce_keys`
-    * `:null` - If `false`, removes `| nil` from the type (makes it non-nullable)
-    * `:default` - Sets a default value for the struct field
   """
 
   @doc """
@@ -319,7 +303,7 @@ defmodule EctoTypedSchema.FieldMacros do
 
   Generates `Schema.t() | nil` for the embed field.
 
-  Unlike associations which use `Ecto.Schema.has_one/1` types, embeds use the
+  Unlike associations which use `Ecto.Schema.has_one/3` types, embeds use the
   schema's `t()` type directly since embedded data is always loaded with the
   parent record.
 

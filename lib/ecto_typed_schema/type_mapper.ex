@@ -7,16 +7,15 @@ defmodule EctoTypedSchema.TypeMapper do
   corresponding quoted Elixir type for use in `@type` definitions.
   """
 
-  @typedoc "Ecto types accepted by `to_elixir_type/2`."
-  @type ecto_type ::
-          atom()
-          | {:array, atom()}
-          | {:map, atom()}
-          | {:assoc, Ecto.Association.t()}
-          | {:embed, map()}
-          | {:parameterized, {module(), term()}}
-          | {:parameterized, module()}
-          | {:parameterized, module(), term()}
+  @typep ecto_type() ::
+           atom()
+           | {:array, atom()}
+           | {:map, atom()}
+           | {:assoc, Ecto.Association.t()}
+           | {:embed, map()}
+           | {:parameterized, {module(), term()}}
+           | {:parameterized, module()}
+           | {:parameterized, module(), term()}
 
   @doc """
   Converts an Ecto field type into a quoted Elixir typespec.
@@ -30,54 +29,36 @@ defmodule EctoTypedSchema.TypeMapper do
   All other keys in `opts` are ignored by this function but may be
   passed through for convenience.
 
-  ## Supported Ecto types
+  ## Type Mapping
 
-  See the module documentation for the full mapping table.
-
-  ### Basic types
-
-    * `:string` -> `String.t()`
-    * `:integer` -> `integer()`
-    * `:float` -> `float()`
-    * `:boolean` -> `boolean()`
-    * `:binary` -> `binary()`
-    * `:bitstring` -> `bitstring()`
-    * `:decimal` -> `Decimal.t()`
-    * `:id` -> `integer()`
-    * `:binary_id` -> `Ecto.UUID.t()`
-    * `:map` -> `map()`
-    * `:array` -> `list()`
-
-  ### Temporal types
-
-    * `:date` -> `Date.t()`
-    * `:time` / `:time_usec` -> `Time.t()`
-    * `:naive_datetime` / `:naive_datetime_usec` -> `NaiveDateTime.t()`
-    * `:datetime` / `:utc_datetime` / `:utc_datetime_usec` -> `DateTime.t()`
-    * `:duration` -> `Duration.t()`
-
-  ### Composite types
-
-    * `{:map, inner}` -> `%{term() => inner_type}`
-    * `{:array, inner}` -> `list(inner_type)`
-
-  ### Association / embed types
-
-    * `{:assoc, %Ecto.Association.BelongsTo{}}` -> `Ecto.Schema.belongs_to(Schema.t())`
-    * `{:assoc, %Ecto.Association.Has{cardinality: :one}}` -> `Ecto.Schema.has_one(Schema.t())`
-    * `{:assoc, %Ecto.Association.Has{cardinality: :many}}` -> `Ecto.Schema.has_many(Schema.t())`
-    * `{:assoc, %Ecto.Association.ManyToMany{}}` -> `Ecto.Schema.many_to_many(Schema.t())`
-    * `{:embed, %{cardinality: :one}}` -> `Ecto.Schema.embeds_one(Schema.t())`
-    * `{:embed, %{cardinality: :many}}` -> `Ecto.Schema.embeds_many(Schema.t())`
-
-  ### Parameterized types
-
-    * `Ecto.Enum` -> union of atom values or `atom()`
-    * Other parameterized modules -> `Module.t()`
-
-  ### Custom modules
-
-    * Any Elixir module -> `Module.t()`
+  | Ecto type | Elixir typespec |
+  |---|---|
+  | `:string` | `String.t()` |
+  | `:integer` | `integer()` |
+  | `:float` | `float()` |
+  | `:boolean` | `boolean()` |
+  | `:binary` | `binary()` |
+  | `:bitstring` | `bitstring()` |
+  | `:decimal` | `Decimal.t()` |
+  | `:id` | `integer()` |
+  | `:binary_id` | `Ecto.UUID.t()` |
+  | `:map` | `map()` |
+  | `:array` | `list()` |
+  | `:date` | `Date.t()` |
+  | `:time` / `:time_usec` | `Time.t()` |
+  | `:naive_datetime` / `:naive_datetime_usec` | `NaiveDateTime.t()` |
+  | `:utc_datetime` / `:utc_datetime_usec` | `DateTime.t()` |
+  | `:duration` | `Duration.t()` |
+  | `{:map, inner}` | `%{term() => inner_type}` |
+  | `{:array, inner}` | `list(inner_type)` |
+  | `belongs_to` | `Ecto.Schema.belongs_to(Schema.t())` |
+  | `has_one` | `Ecto.Schema.has_one(Schema.t())` |
+  | `has_many` | `Ecto.Schema.has_many(Schema.t())` |
+  | `many_to_many` | `Ecto.Schema.many_to_many(Schema.t())` |
+  | `embeds_one` | `Schema.t()` |
+  | `embeds_many` | `list(Schema.t())` |
+  | `Ecto.Enum` | union of atom values or `atom()` |
+  | Other module | `Module.t()` |
 
   ## Returns
 

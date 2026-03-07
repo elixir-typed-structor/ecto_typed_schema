@@ -8,14 +8,13 @@ defmodule EctoTypedSchema.ChangesetExtractor do
   compile time so `EctoTypedSchema` can map each field to an Elixir typespec.
   """
 
-  @typedoc "A single extracted field entry: `{field_name, ecto_type}`."
-  @type field_entry ::
-          {atom(),
-           atom()
-           | Ecto.Type.primitive()
-           | {:parameterized, {module(), Ecto.ParameterizedType.params()}}
-           | {:assoc, Ecto.Association.t()}
-           | {:embed, map()}}
+  @typep field_entry() ::
+           {atom(),
+            atom()
+            | Ecto.Type.primitive()
+            | {:parameterized, {module(), Ecto.ParameterizedType.params()}}
+            | {:assoc, Ecto.Association.t()}
+            | {:embed, map()}}
 
   @doc """
   Extracts a keyword list of `{field_name, ecto_type}` pairs from the
