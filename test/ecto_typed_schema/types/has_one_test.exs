@@ -280,6 +280,43 @@ defmodule EctoTypedSchema.Types.HasOneTest do
     end
   end
 
+  describe "through association with type override" do
+    test "uses custom type for has_one through", ctx do
+      expected_types =
+        with_tmpmodule Schema, ctx do
+          use Ecto.Schema
+
+          schema "users" do
+            has_one :account, Account, foreign_key: :user_id
+            has_one :account_profile, through: [:account, :profile]
+          end
+
+          @type t() :: %__MODULE__{
+                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
+                  id: integer(),
+                  account: Ecto.Schema.has_one(Account.t()) | nil,
+                  account_profile: Profile.t() | nil
+                }
+        after
+          fetch_types!(Schema)
+        end
+
+      generated_types =
+        with_tmpmodule Schema, ctx do
+          use EctoTypedSchema
+
+          typed_schema "users" do
+            has_one :account, Account, foreign_key: :user_id
+            has_one :account_profile, through: [:account, :profile], typed: [type: Profile.t()]
+          end
+        after
+          fetch_types!(Schema)
+        end
+
+      assert_type(expected_types, generated_types)
+    end
+  end
+
   describe "through association fallback warning" do
     test "emits warning when through chain cannot be resolved", ctx do
       warnings =
