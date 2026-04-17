@@ -15,6 +15,27 @@ defmodule EctoTypedSchema.Types.HasOneTest do
     end
   end
 
+  defmodule Account do
+    use Ecto.Schema
+
+    @type t() :: %__MODULE__{}
+
+    schema "accounts" do
+      field :user_id, :integer
+      has_one :profile, Profile, foreign_key: :user_id
+    end
+  end
+
+  defmodule Settings do
+    use Ecto.Schema
+
+    @type t() :: %__MODULE__{}
+
+    schema "settings" do
+      field :user_id, :integer
+    end
+  end
+
   describe "basic has_one" do
     test "generates association type with nil", ctx do
       expected_types =
@@ -186,17 +207,6 @@ defmodule EctoTypedSchema.Types.HasOneTest do
   end
 
   describe "through association" do
-    defmodule Account do
-      use Ecto.Schema
-
-      @type t() :: %__MODULE__{}
-
-      schema "accounts" do
-        field :user_id, :integer
-        has_one :profile, Profile, foreign_key: :user_id
-      end
-    end
-
     test "resolves the target schema through the association chain", ctx do
       expected_types =
         with_tmpmodule Schema, ctx do
@@ -234,16 +244,6 @@ defmodule EctoTypedSchema.Types.HasOneTest do
   end
 
   describe "multiple has_one associations" do
-    defmodule Settings do
-      use Ecto.Schema
-
-      @type t() :: %__MODULE__{}
-
-      schema "settings" do
-        field :user_id, :integer
-      end
-    end
-
     test "two has_one to different schemas", ctx do
       expected_types =
         with_tmpmodule Schema, ctx do
