@@ -64,7 +64,7 @@ end
 ```elixir
 def deps do
   [
-    {:ecto_typed_schema, "~> 0.1"},
+    {:ecto_typed_schema, "~> 0.2"},
     {:ecto, "~> 3.10"}
   ]
 end
