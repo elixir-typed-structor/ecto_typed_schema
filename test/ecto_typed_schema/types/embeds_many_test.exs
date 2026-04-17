@@ -14,6 +14,21 @@ defmodule EctoTypedSchema.Types.EmbedsManyTest do
     end
   end
 
+  defp normalize_type(types) do
+    prefix = inspect(__MODULE__) <> "."
+
+    types
+    |> Enum.map(fn {_kind, type} -> Macro.to_string(Code.Typespec.type_to_quoted(type)) end)
+    |> Enum.map_join(" ", fn s ->
+      s
+      |> String.replace(~r/^t\(\) :: /, "")
+      |> String.replace(prefix, "")
+      |> String.replace(~r/\s+/, " ")
+      |> String.replace("{ ", "{")
+      |> String.replace(" }", "}")
+    end)
+  end
+
   describe "basic embeds_many (non-nullable, defaults to [])" do
     test "generates list type without nil", ctx do
       expected_types =
@@ -101,15 +116,10 @@ defmodule EctoTypedSchema.Types.EmbedsManyTest do
         child_types = fetch_types!(Schema.InlineAddress)
         assert [{:type, {:t, _, _}}] = child_types
 
-        type_string =
-          child_types
-          |> Enum.map(fn {kind, type} ->
-            "@#{kind} #{Macro.to_string(Code.Typespec.type_to_quoted(type))}"
-          end)
-          |> Enum.join("\n")
+        normalized = normalize_type(child_types)
 
-        assert type_string =~ "street: String.t() | nil"
-        assert type_string =~ "city: String.t() | nil"
+        assert normalized ==
+                 "%Schema.InlineAddress{city: String.t() | nil, street: String.t() | nil}"
       end
     end
 

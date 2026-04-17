@@ -14,6 +14,21 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
     end
   end
 
+  defp normalize_type(types) do
+    prefix = inspect(__MODULE__) <> "."
+
+    types
+    |> Enum.map(fn {_kind, type} -> Macro.to_string(Code.Typespec.type_to_quoted(type)) end)
+    |> Enum.map_join(" ", fn s ->
+      s
+      |> String.replace(~r/^t\(\) :: /, "")
+      |> String.replace(prefix, "")
+      |> String.replace(~r/\s+/, " ")
+      |> String.replace("{ ", "{")
+      |> String.replace(" }", "}")
+    end)
+  end
+
   describe "basic embeds_one (nullable by default)" do
     test "generates embed type with nil", ctx do
       expected_types =
@@ -101,15 +116,8 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
         child_types = fetch_types!(Schema.Address)
         assert [{:type, {:t, _, _}}] = child_types
 
-        type_string =
-          child_types
-          |> Enum.map(fn {kind, type} ->
-            "@#{kind} #{Macro.to_string(Code.Typespec.type_to_quoted(type))}"
-          end)
-          |> Enum.join("\n")
-
-        assert type_string =~ "street: String.t() | nil"
-        assert type_string =~ "city: String.t() | nil"
+        normalized = normalize_type(child_types)
+        assert normalized == "%Schema.Address{city: String.t() | nil, street: String.t() | nil}"
       end
     end
 
@@ -161,15 +169,8 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
       after
         child_types = fetch_types!(Schema.Address)
 
-        type_string =
-          child_types
-          |> Enum.map(fn {kind, type} ->
-            "@#{kind} #{Macro.to_string(Code.Typespec.type_to_quoted(type))}"
-          end)
-          |> Enum.join("\n")
-
-        refute type_string =~ "id:"
-        assert type_string =~ "city: String.t() | nil"
+        normalized = normalize_type(child_types)
+        assert normalized == "%Schema.Address{city: String.t() | nil}"
       end
     end
 
@@ -200,24 +201,14 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
 
       {parent_types, shipping_types, address_types} = generated_types
 
-      to_string = fn types ->
-        Enum.map_join(types, "\n", fn {kind, type} ->
-          "@#{kind} #{Macro.to_string(Code.Typespec.type_to_quoted(type))}"
-        end)
-      end
+      assert normalize_type(parent_types) ==
+               "%Schema{__meta__: Ecto.Schema.Metadata.t(Schema), id: integer(), shipping: Ecto.Schema.embeds_one(Schema.Shipping.t()) | nil, total: Decimal.t() | nil}"
 
-      parent_str = to_string.(parent_types)
-      assert parent_str =~ "shipping: Ecto.Schema.embeds_one("
-      assert parent_str =~ "total: Decimal.t() | nil"
+      assert normalize_type(shipping_types) ==
+               "%Schema.Shipping{address: Ecto.Schema.embeds_one(Schema.Shipping.Address.t()) | nil, carrier: String.t() | nil}"
 
-      shipping_str = to_string.(shipping_types)
-      assert shipping_str =~ "carrier: String.t() | nil"
-      assert shipping_str =~ "Ecto.Schema.embeds_one("
-      assert shipping_str =~ "Shipping.Address.t()"
-
-      address_str = to_string.(address_types)
-      assert address_str =~ "city: String.t() | nil"
-      assert address_str =~ "zip: String.t() | nil"
+      assert normalize_type(address_types) ==
+               "%Schema.Shipping.Address{city: String.t() | nil, zip: String.t() | nil}"
     end
   end
 
