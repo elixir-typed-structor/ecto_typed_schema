@@ -14,6 +14,21 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
     end
   end
 
+  defp normalize_type(types) do
+    prefix = inspect(__MODULE__) <> "."
+
+    types
+    |> Enum.map(fn {_kind, type} -> Macro.to_string(Code.Typespec.type_to_quoted(type)) end)
+    |> Enum.map_join(" ", fn s ->
+      s
+      |> String.replace(~r/^t\(\) :: /, "")
+      |> String.replace(prefix, "")
+      |> String.replace(~r/\s+/, " ")
+      |> String.replace("{ ", "{")
+      |> String.replace(" }", "}")
+    end)
+  end
+
   describe "basic embeds_one (nullable by default)" do
     test "generates embed type with nil", ctx do
       expected_types =
@@ -56,8 +71,8 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
 
           schema "users" do
             embeds_one :address, Address, primary_key: false do
-              Ecto.Schema.field(:street, :string)
-              Ecto.Schema.field(:city, :string)
+              field :street, :string
+              field :city, :string
             end
           end
 
@@ -76,8 +91,8 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
 
           typed_schema "users" do
             embeds_one :address, Address, primary_key: false do
-              Ecto.Schema.field(:street, :string)
-              Ecto.Schema.field(:city, :string)
+              field :street, :string
+              field :city, :string
             end
           end
         after
@@ -85,6 +100,115 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
         end
 
       assert_type(expected_types, generated_types)
+    end
+
+    test "inline child module gets @type t()", ctx do
+      with_tmpmodule Schema, ctx do
+        use EctoTypedSchema
+
+        typed_schema "users" do
+          embeds_one :address, Address, primary_key: false do
+            field :street, :string
+            field :city, :string
+          end
+        end
+      after
+        child_types = fetch_types!(Schema.Address)
+        assert [{:type, {:t, _, _}}] = child_types
+
+        normalized = normalize_type(child_types)
+        assert normalized == "%Schema.Address{city: String.t() | nil, street: String.t() | nil}"
+      end
+    end
+
+    test "inline embeds_one with typed: [null: false] makes parent type non-nullable", ctx do
+      expected_types =
+        with_tmpmodule Schema, ctx do
+          use Ecto.Schema
+
+          schema "users" do
+            embeds_one :address, Address, primary_key: false do
+              field :city, :string
+            end
+          end
+
+          @type t() :: %__MODULE__{
+                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
+                  id: integer(),
+                  address: Ecto.Schema.embeds_one(__MODULE__.Address.t())
+                }
+        after
+          fetch_types!(Schema)
+        end
+
+      generated_types =
+        with_tmpmodule Schema, ctx do
+          use EctoTypedSchema
+
+          typed_schema "users" do
+            embeds_one :address, Address, primary_key: false, typed: [null: false] do
+              field :city, :string
+            end
+          end
+        after
+          fetch_types!(Schema)
+        end
+
+      assert_type(expected_types, generated_types)
+    end
+
+    test "inline embeds_one with primary_key: false — child has no :id in type", ctx do
+      with_tmpmodule Schema, ctx do
+        use EctoTypedSchema
+
+        typed_schema "users" do
+          embeds_one :address, Address, primary_key: false do
+            field :city, :string
+          end
+        end
+      after
+        child_types = fetch_types!(Schema.Address)
+
+        normalized = normalize_type(child_types)
+        assert normalized == "%Schema.Address{city: String.t() | nil}"
+      end
+    end
+
+    test "multi-level nested inline embeds compile and generate types", ctx do
+      generated_types =
+        with_tmpmodule Schema, ctx do
+          use EctoTypedSchema
+
+          typed_schema "orders" do
+            field :total, :decimal
+
+            embeds_one :shipping, Shipping, primary_key: false do
+              field :carrier, :string
+
+              embeds_one :address, Address, primary_key: false do
+                field :city, :string
+                field :zip, :string
+              end
+            end
+          end
+        after
+          parent_types = fetch_types!(Schema)
+          shipping_types = fetch_types!(Schema.Shipping)
+          address_types = fetch_types!(Schema.Shipping.Address)
+
+          {parent_types, shipping_types, address_types}
+        end
+
+      {parent_types, shipping_types, address_types} = generated_types
+
+      assert normalize_type(parent_types) ==
+               "%Schema{__meta__: Ecto.Schema.Metadata.t(Schema), id: integer(), shipping: Ecto.Schema.embeds_one(Schema.Shipping.t()) | nil, total: Decimal.t() | nil}"
+
+      assert normalize_type(shipping_types) ==
+               "%Schema.Shipping{address: Ecto.Schema.embeds_one(Schema.Shipping.Address.t()) | nil, carrier: String.t() | nil}"
+
+      assert normalize_type(address_types) ==
+               "%Schema.Shipping.Address{city: String.t() | nil, zip: String.t() | nil}"
     end
   end
 

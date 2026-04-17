@@ -114,13 +114,22 @@ defmodule EctoTypedSchema.FieldMacros do
 
   @spec embeds_one(atom(), module(), keyword(), keyword()) :: Macro.t()
   defmacro embeds_one(name, schema, opts, do: block) do
+    schema = expand_nested_module_alias(schema, __CALLER__)
     {typed, opts} = Keyword.pop(opts, :typed, [])
     typed = sanitize_typed_opts(typed)
 
     quote location: :keep do
       @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
 
-      Ecto.Schema.embeds_one(unquote(name), unquote(schema), unquote(opts), do: unquote(block))
+      {schema, opts} =
+        EctoTypedSchema.FieldMacros.create_inline_module(
+          __ENV__,
+          unquote(schema),
+          unquote(opts),
+          unquote(Macro.escape(block))
+        )
+
+      Ecto.Schema.__embeds_one__(__MODULE__, unquote(name), schema, opts)
     end
   end
 
@@ -138,13 +147,22 @@ defmodule EctoTypedSchema.FieldMacros do
 
   @spec embeds_many(atom(), module(), keyword(), keyword()) :: Macro.t()
   defmacro embeds_many(name, schema, opts, do: block) do
+    schema = expand_nested_module_alias(schema, __CALLER__)
     {typed, opts} = Keyword.pop(opts, :typed, [])
     typed = sanitize_typed_opts(typed)
 
     quote location: :keep do
       @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
 
-      Ecto.Schema.embeds_many(unquote(name), unquote(schema), unquote(opts), do: unquote(block))
+      {schema, opts} =
+        EctoTypedSchema.FieldMacros.create_inline_module(
+          __ENV__,
+          unquote(schema),
+          unquote(opts),
+          unquote(Macro.escape(block))
+        )
+
+      Ecto.Schema.__embeds_many__(__MODULE__, unquote(name), schema, opts)
     end
   end
 
@@ -231,4 +249,33 @@ defmodule EctoTypedSchema.FieldMacros do
   defp maybe_put_through(typed, opts) do
     Keyword.put(typed, :through, Keyword.get(opts, :through))
   end
+
+  @doc false
+  @spec create_inline_module(Macro.Env.t(), module(), keyword(), Macro.t()) ::
+          {module(), keyword()}
+  def create_inline_module(env, module, opts, block) do
+    {pk, opts} = Keyword.pop(opts, :primary_key, {:id, :binary_id, autogenerate: true})
+
+    body =
+      quote do
+        use EctoTypedSchema
+
+        @primary_key unquote(Macro.escape(pk))
+
+        typed_embedded_schema do
+          unquote(block)
+        end
+      end
+
+    Module.create(module, body, env)
+    {module, opts}
+  end
+
+  defp expand_nested_module_alias({:__aliases__, _, [Elixir | _] = alias}, _env),
+    do: Module.concat(alias)
+
+  defp expand_nested_module_alias({:__aliases__, _, [h | t]}, env) when is_atom(h),
+    do: Module.concat([env.module, h | t])
+
+  defp expand_nested_module_alias(other, _env), do: other
 end
