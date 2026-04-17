@@ -76,8 +76,8 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
 
           typed_schema "users" do
             embeds_one :address, Address, primary_key: false do
-              Ecto.Schema.field(:street, :string)
-              Ecto.Schema.field(:city, :string)
+              field :street, :string
+              field :city, :string
             end
           end
         after
@@ -85,6 +85,92 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
         end
 
       assert_type(expected_types, generated_types)
+    end
+
+    test "inline child module gets @type t()", ctx do
+      with_tmpmodule Schema, ctx do
+        use EctoTypedSchema
+
+        typed_schema "users" do
+          embeds_one :address, Address, primary_key: false do
+            field :street, :string
+            field :city, :string
+          end
+        end
+      after
+        child_types = fetch_types!(Schema.Address)
+        assert [{:type, {:t, _, _}}] = child_types
+
+        type_string =
+          child_types
+          |> Enum.map(fn {kind, type} ->
+            "@#{kind} #{Macro.to_string(Code.Typespec.type_to_quoted(type))}"
+          end)
+          |> Enum.join("\n")
+
+        assert type_string =~ "street: String.t() | nil"
+        assert type_string =~ "city: String.t() | nil"
+      end
+    end
+
+    test "inline embeds_one with typed: [null: false] makes parent type non-nullable", ctx do
+      expected_types =
+        with_tmpmodule Schema, ctx do
+          use Ecto.Schema
+
+          schema "users" do
+            embeds_one :address, Address, primary_key: false do
+              Ecto.Schema.field(:city, :string)
+            end
+          end
+
+          @type t() :: %__MODULE__{
+                  __meta__: Ecto.Schema.Metadata.t(__MODULE__),
+                  id: integer(),
+                  address: Ecto.Schema.embeds_one(__MODULE__.Address.t())
+                }
+        after
+          fetch_types!(Schema)
+        end
+
+      generated_types =
+        with_tmpmodule Schema, ctx do
+          use EctoTypedSchema
+
+          typed_schema "users" do
+            embeds_one :address, Address, primary_key: false, typed: [null: false] do
+              field :city, :string
+            end
+          end
+        after
+          fetch_types!(Schema)
+        end
+
+      assert_type(expected_types, generated_types)
+    end
+
+    test "inline embeds_one with primary_key: false — child has no :id in type", ctx do
+      with_tmpmodule Schema, ctx do
+        use EctoTypedSchema
+
+        typed_schema "users" do
+          embeds_one :address, Address, primary_key: false do
+            field :city, :string
+          end
+        end
+      after
+        child_types = fetch_types!(Schema.Address)
+
+        type_string =
+          child_types
+          |> Enum.map(fn {kind, type} ->
+            "@#{kind} #{Macro.to_string(Code.Typespec.type_to_quoted(type))}"
+          end)
+          |> Enum.join("\n")
+
+        refute type_string =~ "id:"
+        assert type_string =~ "city: String.t() | nil"
+      end
     end
   end
 
