@@ -56,8 +56,8 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
 
           schema "users" do
             embeds_one :address, Address, primary_key: false do
-              Ecto.Schema.field(:street, :string)
-              Ecto.Schema.field(:city, :string)
+              field :street, :string
+              field :city, :string
             end
           end
 
@@ -120,7 +120,7 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
 
           schema "users" do
             embeds_one :address, Address, primary_key: false do
-              Ecto.Schema.field(:city, :string)
+              field :city, :string
             end
           end
 
@@ -171,6 +171,53 @@ defmodule EctoTypedSchema.Types.EmbedsOneTest do
         refute type_string =~ "id:"
         assert type_string =~ "city: String.t() | nil"
       end
+    end
+
+    test "multi-level nested inline embeds compile and generate types", ctx do
+      generated_types =
+        with_tmpmodule Schema, ctx do
+          use EctoTypedSchema
+
+          typed_schema "orders" do
+            field :total, :decimal
+
+            embeds_one :shipping, Shipping, primary_key: false do
+              field :carrier, :string
+
+              embeds_one :address, Address, primary_key: false do
+                field :city, :string
+                field :zip, :string
+              end
+            end
+          end
+        after
+          parent_types = fetch_types!(Schema)
+          shipping_types = fetch_types!(Schema.Shipping)
+          address_types = fetch_types!(Schema.Shipping.Address)
+
+          {parent_types, shipping_types, address_types}
+        end
+
+      {parent_types, shipping_types, address_types} = generated_types
+
+      to_string = fn types ->
+        Enum.map_join(types, "\n", fn {kind, type} ->
+          "@#{kind} #{Macro.to_string(Code.Typespec.type_to_quoted(type))}"
+        end)
+      end
+
+      parent_str = to_string.(parent_types)
+      assert parent_str =~ "shipping: Ecto.Schema.embeds_one("
+      assert parent_str =~ "total: Decimal.t() | nil"
+
+      shipping_str = to_string.(shipping_types)
+      assert shipping_str =~ "carrier: String.t() | nil"
+      assert shipping_str =~ "Ecto.Schema.embeds_one("
+      assert shipping_str =~ "Shipping.Address.t()"
+
+      address_str = to_string.(address_types)
+      assert address_str =~ "city: String.t() | nil"
+      assert address_str =~ "zip: String.t() | nil"
     end
   end
 

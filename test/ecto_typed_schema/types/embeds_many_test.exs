@@ -56,8 +56,8 @@ defmodule EctoTypedSchema.Types.EmbedsManyTest do
 
           schema "users" do
             embeds_many :addresses, InlineAddress, primary_key: false do
-              Ecto.Schema.field(:street, :string)
-              Ecto.Schema.field(:city, :string)
+              field :street, :string
+              field :city, :string
             end
           end
 
@@ -121,7 +121,7 @@ defmodule EctoTypedSchema.Types.EmbedsManyTest do
 
           schema "users" do
             embeds_many :addresses, InlineAddress, primary_key: false, on_replace: :delete do
-              Ecto.Schema.field(:city, :string)
+              field :city, :string
             end
           end
 
